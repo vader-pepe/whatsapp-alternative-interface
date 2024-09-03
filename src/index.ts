@@ -1,20 +1,67 @@
-#!/usr/bin/env node
-// NOTE: You can remove the first line if you don't plan to release an
-// executable package. E.g. code that can be used as cli like prettier or eslint
+import express from "express";
+import { startSock } from "./wa-socket";
+import { convertMsToTime } from "./utils";
+import { join } from "path";
+import { WebSocketServer } from "ws";
 
-const main = () => {
-  console.log("hello Node.js and Typescript world :]");
-  console.log("live reloading");
-  console.log("live reloading2");
-};
+const app = express();
+const port = process.env.PORT || 3000;
+const wss = new WebSocketServer({
+  port: 8080,
+  perMessageDeflate: {
+    zlibDeflateOptions: {
+      // See zlib defaults.
+      chunkSize: 1024,
+      memLevel: 7,
+      level: 3,
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024,
+    },
+    // Other options settable:
+    clientNoContextTakeover: true, // Defaults to negotiated value.
+    serverNoContextTakeover: true, // Defaults to negotiated value.
+    serverMaxWindowBits: 10, // Defaults to negotiated value.
+    // Below options specified as default values.
+    concurrencyLimit: 10, // Limits zlib concurrency for perf.
+    threshold: 1024, // Size (in bytes) below which messages
+    // should not be compressed if context takeover is disabled.
+  },
+});
 
-// This was just here to force a linting error for now to demonstrate/test the
-// eslint pipeline. You can uncomment this and run "yarn lint:check" to test the
-// linting.
-// const x: number[] = [1, 2];
-// const y: Array<number> = [3, 4];
-// if (x == y) {
-//   console.log("equal!");
-// }
+wss.on("connection", function connection(ws) {
+  console.log("selamat datang di indomaret");
+  ws.on("error", console.error);
 
-main();
+  ws.on("message", function message(data) {
+    console.log("received: %s", data);
+  });
+
+  ws.send("something");
+});
+
+const timestamp = new Date();
+
+app.get("/check", function (_req, res) {
+  const timediff = new Date().getTime() - timestamp.getTime();
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.status(200).send(`Alive for: ${convertMsToTime(timediff)}`);
+});
+
+app.post("/clicked", function (_req, res) {
+  res.status(200).send(`OK`);
+});
+
+app.use("/public", express.static(join(__dirname, "public")));
+app.get("/", (_req, res) => {
+  res.sendFile(join(__dirname, "index.html"));
+});
+
+app.all("*", function (_req, res) {
+  res.redirect("/");
+});
+
+app.listen(port, async () => {
+  console.log(`Server running at http://localhost:${port}`);
+  await startSock();
+});

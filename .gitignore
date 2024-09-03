@@ -138,3 +138,6 @@ dist
 node_modules
 TODO
 .envrc
+baileys_auth_info
+wa-logs.txt
+baileys_store_multi.json
