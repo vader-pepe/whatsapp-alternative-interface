@@ -3,6 +3,7 @@ import { startSock } from "./wa-socket";
 import { convertMsToTime } from "./utils";
 import { join } from "path";
 import { WebSocketServer } from "ws";
+import { WSSingleton } from "./singleton";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,17 +30,6 @@ const wss = new WebSocketServer({
   },
 });
 
-wss.on("connection", function connection(ws) {
-  console.log("selamat datang di indomaret");
-  ws.on("error", console.error);
-
-  ws.on("message", function message(data) {
-    console.log("received: %s", data);
-  });
-
-  ws.send("something");
-});
-
 const timestamp = new Date();
 
 app.get("/check", function (_req, res) {
@@ -63,5 +53,22 @@ app.all("*", function (_req, res) {
 
 app.listen(port, async () => {
   console.log(`Server running at http://localhost:${port}`);
-  await startSock();
+  const socket = await startSock();
+
+  wss.on("connection", function connection(ws) {
+    console.log("selamat datang di indomaret");
+
+    socket.ev.process(async (events) => {
+      const singleton = new WSSingleton(events, ws);
+      await singleton.start();
+    });
+
+    ws.on("error", console.error);
+
+    ws.on("message", function message(data) {
+      console.log("received: %s", data);
+    });
+
+    ws.send("something");
+  });
 });
