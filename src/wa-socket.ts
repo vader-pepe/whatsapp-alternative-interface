@@ -1,13 +1,13 @@
-import { Boom } from "@hapi/boom";
+// import { Boom } from "@hapi/boom";
 import NodeCache from "node-cache";
 import readline from "readline";
 import makeWASocket, {
   AnyMessageContent,
-  BinaryInfo,
+  // BinaryInfo,
   delay,
-  DisconnectReason,
+  // DisconnectReason,
   // downloadAndProcessHistorySyncNotification,
-  encodeWAM,
+  // encodeWAM,
   fetchLatestBaileysVersion,
   getAggregateVotesInPollMessage,
   // getHistoryMsg,
@@ -21,10 +21,11 @@ import makeWASocket, {
   WAMessageKey,
 } from "@whiskeysockets/baileys";
 //import MAIN_LOGGER from '../src/Utils/logger'
-import fs from "fs";
+// import fs from "fs";
 import P from "pino";
-import qrcode from "qrcode";
+// import qrcode from "qrcode";
 
+export type Socket = ReturnType<typeof makeWASocket>;
 const logger = P(
   { timestamp: () => `,"time":"${new Date().toJSON()}"` },
   P.destination("./wa-logs.txt"),
@@ -119,55 +120,6 @@ export const startSock = async () => {
     async (events) => {
       // something about the connection changed
       // maybe it closed, or we received all offline message or connection opened
-      if (events["connection.update"]) {
-        const update = events["connection.update"];
-        const { connection, lastDisconnect } = update;
-        if (connection === "close") {
-          // reconnect if not logged out
-          if (
-            (lastDisconnect?.error as Boom)?.output?.statusCode !==
-            DisconnectReason.loggedOut
-          ) {
-            startSock();
-          } else {
-            console.log("Connection closed. You are logged out.");
-          }
-        }
-
-        // WARNING: THIS WILL SEND A WAM EXAMPLE AND THIS IS A ****CAPTURED MESSAGE.****
-        // DO NOT ACTUALLY ENABLE THIS UNLESS YOU MODIFIED THE FILE.JSON!!!!!
-        // THE ANALYTICS IN THE FILE ARE OLD. DO NOT USE THEM.
-        // YOUR APP SHOULD HAVE GLOBALS AND ANALYTICS ACCURATE TO TIME, DATE AND THE SESSION
-        // THIS FILE.JSON APPROACH IS JUST AN APPROACH I USED, BE FREE TO DO THIS IN ANOTHER WAY.
-        // THE FIRST EVENT CONTAINS THE CONSTANT GLOBALS, EXCEPT THE seqenceNumber(in the event) and commitTime
-        // THIS INCLUDES STUFF LIKE ocVersion WHICH IS CRUCIAL FOR THE PREVENTION OF THE WARNING
-        const sendWAMExample = false;
-        if (connection === "open" && sendWAMExample) {
-          /// sending WAM EXAMPLE
-          const {
-            header: { wamVersion, eventSequenceNumber },
-            events,
-          } = JSON.parse(
-            await fs.promises.readFile("./boot_analytics_test.json", "utf-8"),
-          );
-
-          const binaryInfo = new BinaryInfo({
-            protocolVersion: wamVersion,
-            sequence: eventSequenceNumber,
-            events: events,
-          });
-
-          const buffer = encodeWAM(binaryInfo);
-
-          const result = await sock.sendWAMBuffer(buffer);
-          console.log(result);
-        }
-
-        console.log("connection update", update);
-        if (update.qr) {
-          await qrcode.toString(update.qr, { type: "terminal" });
-        }
-      }
 
       // credentials updated -- save them
       if (events["creds.update"]) {
