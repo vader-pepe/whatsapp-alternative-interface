@@ -3,8 +3,11 @@ import NodeCache from "node-cache";
 import readline from "readline";
 import makeWASocket, {
   AnyMessageContent,
+  BinaryInfo,
   // BinaryInfo,
   delay,
+  DisconnectReason,
+  encodeWAM,
   // DisconnectReason,
   // downloadAndProcessHistorySyncNotification,
   // encodeWAM,
@@ -20,10 +23,13 @@ import makeWASocket, {
   WAMessageContent,
   WAMessageKey,
 } from "@whiskeysockets/baileys";
+import fs from "fs/promises";
 //import MAIN_LOGGER from '../src/Utils/logger'
 // import fs from "fs";
 import P from "pino";
-// import qrcode from "qrcode";
+import { Boom } from "@hapi/boom";
+import { wss } from "src";
+import QRCode from "qrcode-svg";
 
 export type Socket = ReturnType<typeof makeWASocket>;
 const logger = P(
@@ -53,7 +59,7 @@ const question = (text: string) =>
 
 // the store maintains the data of the WA connection in memory
 // can be written out to a file & read from it
-const store = useStore ? makeInMemoryStore({ logger }) : undefined;
+export const store = useStore ? makeInMemoryStore({ logger }) : undefined;
 store?.readFromFile("./baileys_store_multi.json");
 // save every 10s
 setInterval(() => {
@@ -70,7 +76,7 @@ export const startSock = async () => {
   const sock = makeWASocket({
     version,
     logger,
-    printQRInTerminal: !usePairingCode,
+    printQRInTerminal: false,
     mobile: useMobile,
     auth: {
       creds: state.creds,
@@ -126,6 +132,76 @@ export const startSock = async () => {
         await saveCreds();
       }
 
+      if (events["connection.update"]) {
+        const update = events["connection.update"];
+        const { connection, lastDisconnect } = update;
+        if (connection === "close") {
+          // reconnect if not logged out
+          if (
+            (lastDisconnect?.error as Boom)?.output?.statusCode !==
+            DisconnectReason.loggedOut
+          ) {
+            await startSock();
+          } else {
+            console.log("Connection closed. You are logged out.");
+            wss.clients.forEach((client) => {
+              client.close();
+            });
+          }
+        }
+
+        // WARNING: THIS WILL SEND A WAM EXAMPLE AND THIS IS A ****CAPTURED MESSAGE.****
+        // DO NOT ACTUALLY ENABLE THIS UNLESS YOU MODIFIED THE FILE.JSON!!!!!
+        // THE ANALYTICS IN THE FILE ARE OLD. DO NOT USE THEM.
+        // YOUR APP SHOULD HAVE GLOBALS AND ANALYTICS ACCURATE TO TIME, DATE AND THE SESSION
+        // THIS FILE.JSON APPROACH IS JUST AN APPROACH I USED, BE FREE TO DO THIS IN ANOTHER WAY.
+        // THE FIRST EVENT CONTAINS THE CONSTANT GLOBALS, EXCEPT THE seqenceNumber(in the event) and commitTime
+        // THIS INCLUDES STUFF LIKE ocVersion WHICH IS CRUCIAL FOR THE PREVENTION OF THE WARNING
+        const sendWAMExample = false;
+        if (connection === "open" && sendWAMExample) {
+          /// sending WAM EXAMPLE
+          const {
+            header: { wamVersion, eventSequenceNumber },
+            events,
+          } = JSON.parse(
+            await fs.readFile("./boot_analytics_test.json", "utf-8"),
+          );
+
+          const binaryInfo = new BinaryInfo({
+            protocolVersion: wamVersion,
+            sequence: eventSequenceNumber,
+            events: events,
+          });
+
+          const buffer = encodeWAM(binaryInfo);
+
+          const result = await sock.sendWAMBuffer(buffer);
+          console.log(result);
+        }
+        console.log("connection update", update);
+
+        if (update.connection === "open") {
+          console.log("qr already scanned");
+          wss.clients.forEach((client) => {
+            client.send(JSON.stringify({ qr: undefined }));
+          });
+          wss.clients.forEach((client) => {
+            client.send(JSON.stringify({ state: state.creds }, undefined, 2));
+          });
+        }
+
+        if (update.qr) {
+          wss.clients.forEach((client) => {
+            const qr = new QRCode(update.qr || "").svg();
+            const cleanedQR = qr.replace(
+              `<?xml version="1.0" standalone="yes"?>`,
+              "",
+            );
+            client.send(JSON.stringify({ qr: cleanedQR }));
+          });
+        }
+      }
+
       // if (events["labels.association"]) {
       //   console.log(events["labels.association"]);
       // }
@@ -142,7 +218,6 @@ export const startSock = async () => {
       if (events["messaging-history.set"]) {
         const { chats, contacts, messages, isLatest, progress, syncType } =
           events["messaging-history.set"];
-        // ws.send(chats)
         if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
           console.log("received on-demand history sync, messages=", messages);
         }
@@ -151,11 +226,25 @@ export const startSock = async () => {
         );
       }
 
+      if (events["chats.upsert"]) {
+        const chats = events["chats.upsert"];
+        console.log("chat upsert", chats);
+        wss.clients.forEach((client) => {
+          client.send(JSON.stringify({ chats }));
+        });
+      }
+
       // received a new message
       if (events["messages.upsert"]) {
         const upsert = events["messages.upsert"];
         console.log("recv messages ", JSON.stringify(upsert, undefined, 2));
-
+        wss.clients.forEach((client) => {
+          client.send(
+            JSON.stringify({
+              messages: JSON.stringify(upsert.messages, undefined, 2),
+            }),
+          );
+        });
         if (upsert.type === "notify") {
           for (const msg of upsert.messages) {
             if (

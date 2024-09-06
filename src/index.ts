@@ -1,14 +1,13 @@
 import express from "express";
-import { Socket, startSock } from "./wa-socket";
+import { Socket, startSock, store } from "./wa-socket";
 import { convertMsToTime } from "./utils";
-import { join } from "path";
-import { WebSocketServer } from "ws";
-import { WSSingleton } from "./singleton";
+import { WebSocket, WebSocketServer } from "ws";
+import cors from "cors";
 
 const app = express();
 const port = process.env.PORT || 3000;
-const wss = new WebSocketServer({
-  port: 8080,
+export const wss = new WebSocketServer({
+  port: 8081,
   perMessageDeflate: {
     zlibDeflateOptions: {
       // See zlib defaults.
@@ -30,36 +29,78 @@ const wss = new WebSocketServer({
   },
 });
 
-let socket: Socket;
+let currentConnection: WebSocket | null;
+let s: Socket | null;
 wss.on("connection", async function connection(ws) {
   console.log("selamat datang di indomaret");
-  if (socket) {
-    const instance = new WSSingleton(socket, ws);
-    await instance.start();
+  if (!s) {
+    s = await startSock();
+  } else {
+    ws.send(JSON.stringify({ state: s.authState.creds }, undefined, 2));
   }
+  if (currentConnection) {
+    if (currentConnection.readyState !== WebSocket.CLOSED) {
+      console.log("Closing previous connection...");
+      currentConnection.terminate(); // Force close the connection
+      currentConnection = null;
+    } else {
+      console.log("Previous connection already closed.");
+    }
+  }
+  currentConnection = ws;
 
   ws.on("error", console.error);
 
   ws.on("message", function message(data) {
     console.log("received: %s", data);
   });
+
+  ws.on("close", () => {
+    console.log("Connection closed.");
+    if (s) {
+      s.end(new Error("Socket Closed"));
+    }
+    if (currentConnection === ws) {
+      currentConnection = null; // Clear the current connection if it was this one
+    }
+  });
 });
 
 const timestamp = new Date();
 
-app.get("/check", function (_req, res) {
+app.use(cors({}));
+app.get("/", function (_req, res) {
   const timediff = new Date().getTime() - timestamp.getTime();
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.status(200).send(`Alive for: ${convertMsToTime(timediff)}`);
 });
 
-app.post("/clicked", function (_req, res) {
-  res.status(200).send(`OK`);
+app.get("/chats", async function (_req, res) {
+  const chats = store?.chats.all();
+  if (chats) {
+    return res.status(200).json({ chats });
+  }
+  return res.status(404).send("No Data");
 });
 
-app.use("/public", express.static(join(__dirname, "public")));
-app.get("/", (_req, res) => {
-  res.sendFile(join(__dirname, "index.html"));
+app.get("/messages", async function (_req, res) {
+  const messages = store?.messages;
+  if (messages) {
+    return res.status(200).json({ messages: messages });
+  }
+  return res.status(404).send("No Data");
+});
+
+app.get("/contacts", async function (_req, res) {
+  const contacts = store?.contacts;
+  if (contacts) {
+    return res.status(200).json({ contacts });
+  }
+  return res.status(404).send("No Data");
+});
+
+app.post("/clicked", function (_req, res) {
+  res.status(200).send(`OK`);
 });
 
 app.all("*", function (_req, res) {
@@ -68,6 +109,4 @@ app.all("*", function (_req, res) {
 
 app.listen(port, async () => {
   console.log(`Server running at http://localhost:${port}`);
-  const sc = await startSock();
-  socket = sc;
 });
