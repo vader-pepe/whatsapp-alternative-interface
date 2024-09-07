@@ -3,6 +3,7 @@ import { Socket, startSock, store } from "./wa-socket";
 import { convertMsToTime } from "./utils";
 import { WebSocket, WebSocketServer } from "ws";
 import cors from "cors";
+import { proto } from "@whiskeysockets/baileys";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -76,19 +77,49 @@ app.get("/", function (_req, res) {
 });
 
 app.get("/chats", async function (_req, res) {
-  const chats = store?.chats.all();
-  if (chats) {
-    return res.status(200).json({ chats });
+  if (!store) {
+    return res.status(404).send("No Data");
   }
-  return res.status(404).send("No Data");
+
+  const chats = store.chats.all();
+
+  if (!chats) {
+    return res.status(404).send("No Chats Found");
+  }
+
+  chats.forEach((chat) => {
+    const messages = store!.messages[chat.id]?.array;
+
+    if (messages && messages.length > 0) {
+      const latestMessage = messages[messages.length - 1];
+
+      // Reset the chat messages and push the latest message
+      chat.messages = [
+        {
+          message: latestMessage,
+        },
+      ];
+    }
+  });
+
+  return res.status(200).json({ chats });
 });
 
-app.get("/messages", async function (_req, res) {
-  const messages = store?.messages;
-  if (messages) {
-    return res.status(200).json({ messages: messages });
+app.get("/messages/:id", async function (req, res) {
+  const chatId = req.params.id;
+
+  if (!store) {
+    return res.status(404).send("No Data");
   }
-  return res.status(404).send("No Data");
+
+  const chat = store.chats.get(chatId);
+  const messages = store.messages[chatId];
+
+  if (!chat) {
+    return res.status(404).send("Chat Not Found");
+  }
+
+  return res.status(200).json({ messages });
 });
 
 app.get("/contacts", async function (_req, res) {
