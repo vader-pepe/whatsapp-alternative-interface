@@ -5,11 +5,18 @@ import {
   type AuthenticationState,
 } from "@whiskeysockets/baileys";
 import axios from "axios";
-import { createSignal, type Component, For, JSX } from "solid-js";
-import l from "lodash";
+import { createSignal, type Component, For } from "solid-js";
+import {
+  appendIncomingMessage,
+  determineChat,
+  setChatsRow,
+} from "./utils/chat";
+import { ChatBubbles } from "./components/chat-bubbles";
+import { createVirtualizer } from "@tanstack/solid-virtual";
 
 const App: Component = () => {
-  let virtualScrollContainer: HTMLElement;
+  const socket = new WebSocket("ws://localhost:8081");
+  let virtualizedContainer: HTMLElement;
   const [qr, setQr] = createSignal<string | undefined>(undefined);
   const [isConnectionEstablished, setIsConnectionEstablished] =
     createSignal(false);
@@ -20,174 +27,17 @@ const App: Component = () => {
   >([]);
   const [showChatWindow, setShowChatWindow] = createSignal(false);
 
+  const rowVirtualizer = createVirtualizer({
+    count: chats().length,
+    getScrollElement: () => virtualizedContainer,
+    estimateSize: () => 35,
+  });
+
   async function getChats() {
     const d = await axios.get<{ chats: Chat[] }>(`http://127.0.0.1:3001/chats`);
     if (d.data) {
       setChats(d.data.chats);
     }
-  }
-
-  function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  function checkMessageType(messageInfo: proto.IWebMessageInfo) {
-    const message = messageInfo.message;
-    if (!message) return null;
-    if ("conversation" in message) return "conversation";
-    if ("imageMessage" in message) return "imageMessage";
-    if ("videoMessage" in message) return "videoMessage";
-    if ("stickerMessage" in message) return "stickerMessage";
-    if ("extendedTextMessage" in message) return "extendedTextMessage";
-    return "unimplemented";
-  }
-  type MessageType = ReturnType<typeof checkMessageType>;
-
-  function ChatBubbles({
-    messageInfo,
-  }: {
-    messageInfo: proto.IWebMessageInfo;
-  }) {
-    const msgType = checkMessageType(messageInfo);
-    const message = messageInfo.message;
-    let extendedContent: string | null = null;
-    let participant: string | null | undefined = null;
-
-    if (message && msgType !== null) {
-      participant = message.chat?.displayName;
-      if (msgType === "extendedTextMessage") {
-        const extendedMessage = message.extendedTextMessage;
-        extendedContent = returnMessageBasedOnMessageType(
-          extendedMessage?.contextInfo || null,
-        );
-        participant = extendedMessage?.contextInfo?.participant;
-      }
-
-      // Define a reusable chat bubble component
-      const ChatBubble = ({
-        participant,
-        extendedContent,
-        mainContent,
-        bubbleStyle,
-        isFromMe,
-      }: {
-        participant?: string | null;
-        extendedContent?: string | null;
-        mainContent: JSX.Element | null;
-        bubbleStyle: string;
-        isFromMe: boolean;
-      }) => (
-        <div class={`break-words text-wrap chat-bubble ${bubbleStyle}`}>
-          {extendedContent ? (
-            <div
-              class={`"px-2 py-1 ${isFromMe ? "bg-blue-300" : "bg-gray-700"} ${isFromMe ? "text-black" : "text-white"} rounded-t-md flex flex-col text-left`}
-            >
-              {participant ? <small>{participant}</small> : null}
-              {extendedContent}
-            </div>
-          ) : null}
-          {mainContent}
-        </div>
-      );
-
-      // Rendering based on whether the message is from the user
-      return (
-        <>
-          {messageInfo.key.fromMe ? (
-            <div class="chat chat-end">
-              <ChatBubble
-                participant={participant}
-                extendedContent={extendedContent}
-                mainContent={returnMessageBasedOnMessageType(messageInfo)}
-                bubbleStyle="chat-bubble-info"
-                isFromMe={true}
-              />
-            </div>
-          ) : (
-            <>
-              <small class="ml-4">
-                {messageInfo.pushName || messageInfo.key.remoteJid}
-              </small>
-              <div class="flex flex-col chat chat-start">
-                <ChatBubble
-                  participant={participant}
-                  extendedContent={extendedContent}
-                  mainContent={returnMessageBasedOnMessageType(messageInfo)}
-                  bubbleStyle=""
-                  isFromMe={false}
-                />
-              </div>
-            </>
-          )}
-        </>
-      );
-    }
-
-    return null;
-  }
-
-  function returnMessageBasedOnMessageType(
-    messageInfo: proto.IWebMessageInfo | proto.IContextInfo | null,
-  ): null | string {
-    if (!messageInfo) return null;
-    let message: proto.IMessage | undefined | null = null;
-    let msgType: MessageType = "conversation";
-    if ("message" in messageInfo) {
-      message = messageInfo.message;
-      msgType = checkMessageType(messageInfo);
-    } else if ("quotedMessage" in messageInfo) {
-      message = messageInfo.quotedMessage;
-    }
-
-    if (!message) return null;
-
-    switch (msgType) {
-      case "conversation":
-        return message.conversation!;
-      case "imageMessage":
-        return (
-          JSON.stringify(message.imageMessage!) + "unimplementedImageMessage"
-        );
-      case "videoMessage":
-        return (
-          JSON.stringify(message.videoMessage!) + "unimplementedVideoMessage"
-        );
-      case "stickerMessage":
-        return (
-          JSON.stringify(message.stickerMessage!) +
-          "unimplementedStickerMessage"
-        );
-      case "extendedTextMessage":
-        // TODO: fix this
-        // const context = message.extendedTextMessage!.contextInfo;
-        // if (context) {
-        //   const extra = returnMessageBasedOnMessageType(context);
-        //   if (extra) {
-        //     return extra;
-        //   }
-        //   return message.extendedTextMessage!.text || null;
-        // }
-        return message.extendedTextMessage!.text || null;
-      default:
-        return JSON.stringify(message);
-    }
-  }
-
-  function setChatsRow(chat: Chat) {
-    const messages = chat.messages;
-
-    if (messages && messages.length > 0) {
-      // Get the first message info
-      const firstMessageInfo = messages[0].message;
-      if (firstMessageInfo) {
-        // Return the type of the first message
-        return returnMessageBasedOnMessageType(firstMessageInfo);
-      }
-      return null;
-    }
-
-    // Default case if no messages or no message info
-    return null;
   }
 
   async function openChatWindow(chat: Chat) {
@@ -206,48 +56,6 @@ const App: Component = () => {
     setShowChatWindow(false);
   }
 
-  // if got new incoming message, loop over chats, look for matching msg, then append
-  function appendIncomingMessage(remoteMsgs: proto.IWebMessageInfo[]) {
-    const currentChats = l.cloneDeep(chats());
-    let targetChat: Chat | undefined;
-    remoteMsgs.forEach((msg) => {
-      targetChat = l.find(currentChats, (c) => c.id === msg.key.remoteJid);
-      if (targetChat) {
-        const index = l.indexOf(currentChats, targetChat);
-        const updatedChat: Chat = {
-          ...targetChat,
-          messages: [
-            {
-              message: msg,
-            },
-          ],
-        };
-        currentChats.splice(index, 1);
-        currentChats.unshift(updatedChat);
-      }
-    });
-
-    if (targetChat) {
-      setChats(currentChats);
-    }
-  }
-
-  function determineChat(chat: Chat): "group" | "person" | "story" | "unknown" {
-    switch (true) {
-      case chat.id.endsWith("@g.us"):
-        return "group";
-      case chat.id.endsWith("@s.whatsapp.net"):
-        return "person";
-      case chat.id.endsWith("@broadcast"):
-        return "story";
-
-      default:
-        return "unknown";
-    }
-  }
-  type ChatType = ReturnType<typeof determineChat>;
-
-  const socket = new WebSocket("ws://localhost:8081");
   // Connection opened
   socket.addEventListener("open", (_event) => {
     setIsConnectionEstablished(true);
@@ -266,7 +74,8 @@ const App: Component = () => {
 
     if (raw.messages) {
       const messages = JSON.parse(raw.messages) as proto.IWebMessageInfo[];
-      appendIncomingMessage(messages);
+      const incoming = appendIncomingMessage(messages, chats());
+      setChats(incoming);
     }
 
     if (raw.state) {
@@ -279,7 +88,6 @@ const App: Component = () => {
 
   return (
     <div
-      ref={(el) => (virtualScrollContainer = el)}
       class={`relative py-3 px-4 h-screen ${!isConnectionEstablished() ? "flex justify-center items-center" : ""} `}
     >
       {qr() ? (
@@ -290,7 +98,7 @@ const App: Component = () => {
 
       {isConnectionEstablished() ? (
         <>
-          <label class="input input-bordered flex items-center gap-2">
+          <label class="fixed my-3 mx-4 inset-0 input input-bordered flex items-center gap-2 z-10">
             <input type="text" class="grow" placeholder="Search Contact..." />
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -306,7 +114,10 @@ const App: Component = () => {
             </svg>
           </label>
 
-          <div class="flex flex-col gap-2 mt-4">
+          <div
+            ref={(el) => (virtualizedContainer = el)}
+            class="flex flex-col gap-2 mt-14"
+          >
             <For each={chats()}>
               {(chat, index) => {
                 // WARNING: THIS WILL BE CATASTROPHIC
