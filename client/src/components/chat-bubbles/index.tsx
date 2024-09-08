@@ -4,6 +4,7 @@ import {
   returnMessageBasedOnMessageType,
 } from "../../utils/message";
 import { ChatBubble } from "./chat-bubble";
+import l from "lodash"
 
 export function ChatBubbles({
   messageInfo,
@@ -17,11 +18,13 @@ export function ChatBubbles({
 
   if (message && msgType !== null) {
     participant = message.chat?.displayName;
-    if (msgType === "extendedTextMessage") {
+    if (l.includes(msgType, "extendedTextMessage")) {
       const extendedMessage = message.extendedTextMessage;
-      extendedContent = returnMessageBasedOnMessageType(
-        extendedMessage?.contextInfo || null,
-      );
+      if (extendedMessage) {
+        extendedContent = returnMessageBasedOnMessageType(
+          extendedMessage.contextInfo || null,
+        );
+      }
       participant = extendedMessage?.contextInfo?.participant;
     }
 

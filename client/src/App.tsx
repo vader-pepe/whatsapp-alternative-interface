@@ -12,11 +12,9 @@ import {
   setChatsRow,
 } from "./utils/chat";
 import { ChatBubbles } from "./components/chat-bubbles";
-import { createVirtualizer } from "@tanstack/solid-virtual";
 
 const App: Component = () => {
   const socket = new WebSocket("ws://localhost:8081");
-  let virtualizedContainer: HTMLElement;
   const [qr, setQr] = createSignal<string | undefined>(undefined);
   const [isConnectionEstablished, setIsConnectionEstablished] =
     createSignal(false);
@@ -27,14 +25,8 @@ const App: Component = () => {
   >([]);
   const [showChatWindow, setShowChatWindow] = createSignal(false);
 
-  const rowVirtualizer = createVirtualizer({
-    count: chats().length,
-    getScrollElement: () => virtualizedContainer,
-    estimateSize: () => 35,
-  });
-
   async function getChats() {
-    const d = await axios.get<{ chats: Chat[] }>(`http://127.0.0.1:3001/chats`);
+    const d = await axios.get<{ chats: Chat[] }>(`http://localhost:3001/chats`);
     if (d.data) {
       setChats(d.data.chats);
     }
@@ -44,7 +36,7 @@ const App: Component = () => {
     setCurrentChat(chat);
     setShowChatWindow(true);
     const m = await axios.get<{ messages: WAMessage[] }>(
-      `http://127.0.0.1:3001/messages/${chat.id}`,
+      `http://localhost:3001/messages/${chat.id}`,
     );
     if (m.data) {
       setCurrentChatMessages(m.data.messages);
@@ -115,7 +107,6 @@ const App: Component = () => {
           </label>
 
           <div
-            ref={(el) => (virtualizedContainer = el)}
             class="flex flex-col gap-2 mt-14"
           >
             <For each={chats()}>

@@ -1,20 +1,32 @@
 import { type proto } from "@whiskeysockets/baileys";
+import l from "lodash";
+
+export type MessageType = keyof proto.IMessage;
 
 /**
  * Simple function to check message type
  */
-export function checkMessageType(messageInfo: proto.IWebMessageInfo) {
-  const message = messageInfo.message;
+export function checkMessageType(messageInfo: proto.IWebMessageInfo | proto.IContextInfo) {
+  let message: proto.IMessage | undefined | null = null;
+  if ("message" in messageInfo) {
+    message = messageInfo.message
+  } else if ("quotedMessage" in messageInfo) {
+    message = messageInfo.quotedMessage
+  }
   if (!message) return null;
-  if ("conversation" in message) return "conversation";
-  if ("imageMessage" in message) return "imageMessage";
-  if ("videoMessage" in message) return "videoMessage";
-  if ("stickerMessage" in message) return "stickerMessage";
-  if ("extendedTextMessage" in message) return "extendedTextMessage";
-  if ("groupInviteMessage" in message) return "groupInviteMessage";
-  return "unimplemented";
+  const keys = Object.keys(message);
+  return keys as MessageType[]
 }
-export type MessageType = keyof proto.IMessage;
+
+type Handler = (key: string, value: any) => void;
+const keysToCheck: MessageType[] = []
+function handleKeys<T extends Record<string, any>>(obj: T, keysToCheck: string[], handler: Handler): void {
+  keysToCheck.forEach(key => {
+    if (key in obj) {
+      handler(key, obj[key]);
+    }
+  });
+}
 
 /**
  * Function to get the contents of the said message
