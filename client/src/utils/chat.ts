@@ -1,5 +1,5 @@
 import { type proto, type Chat } from "@whiskeysockets/baileys";
-import { returnMessageBasedOnMessageType } from "./message";
+import { getMessage } from "./message";
 import l from "lodash";
 import { Content } from "../components/content";
 
@@ -12,21 +12,18 @@ export function setChatsRow(chat: Chat) {
   if (messages && messages.length > 0) {
     const firstMessageInfo = messages[0].message;
     if (firstMessageInfo) {
-      const c = returnMessageBasedOnMessageType(firstMessageInfo);
+      const c = getMessage(firstMessageInfo);
       return Content({ c });
     }
     return null;
   }
-
   return null;
 }
 
 /**
  * Determine chat type
  */
-export function determineChat(
-  chat: Chat,
-): "group" | "person" | "story" | "unknown" {
+export function chatType(chat: Chat): "group" | "person" | "story" | "unknown" {
   switch (true) {
     case chat.id.endsWith("@g.us"):
       return "group";
@@ -39,7 +36,7 @@ export function determineChat(
       return "unknown";
   }
 }
-export type ChatType = ReturnType<typeof determineChat>;
+export type ChatType = ReturnType<typeof chatType>;
 
 /**
  * Append incoming message to whichever chat its belong to

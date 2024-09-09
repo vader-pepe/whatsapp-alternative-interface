@@ -69,13 +69,14 @@ wss.on("connection", async function connection(ws) {
 const timestamp = new Date();
 
 app.use(cors({}));
-app.get("/", function(_req, res) {
+app.use(express.json());
+app.get("/", function (_req, res) {
   const timediff = new Date().getTime() - timestamp.getTime();
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.status(200).send(`Alive for: ${convertMsToTime(timediff)}`);
 });
 
-app.get("/chats", async function(_req, res) {
+app.get("/chats", async function (_req, res) {
   if (!store) {
     return res.status(404).send("No Data");
   }
@@ -104,7 +105,7 @@ app.get("/chats", async function(_req, res) {
   return res.status(200).json({ chats });
 });
 
-app.get("/messages/:id", async function(req, res) {
+app.get("/messages/:id", async function (req, res) {
   const chatId = req.params.id;
 
   if (!store) {
@@ -121,7 +122,7 @@ app.get("/messages/:id", async function(req, res) {
   return res.status(200).json({ messages });
 });
 
-app.get("/contacts", async function(_req, res) {
+app.get("/contacts", async function (_req, res) {
   const contacts = store?.contacts;
   if (contacts) {
     return res.status(200).json({ contacts });
@@ -129,11 +130,17 @@ app.get("/contacts", async function(_req, res) {
   return res.status(404).send("No Data");
 });
 
-app.post("/clicked", function(_req, res) {
-  res.status(200).send(`OK`);
+app.post("/send/:id", async function (req, res) {
+  const id = req.params.id;
+  const text = req.body.text as string;
+  if (s) {
+    await s.sendMessage(id, { text });
+    return res.status(200).send("OK");
+  }
+  return res.status(404).send("No Data");
 });
 
-app.all("*", function(_req, res) {
+app.all("*", function (_req, res) {
   res.redirect("/");
 });
 

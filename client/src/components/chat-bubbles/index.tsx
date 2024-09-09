@@ -1,15 +1,14 @@
 import { type proto } from "@whiskeysockets/baileys";
-import {
-  checkMessageType,
-  returnMessageBasedOnMessageType,
-} from "../../utils/message";
+import { checkMessageType, getMessage } from "../../utils/message";
 import { ChatBubble } from "./chat-bubble";
-import l from "lodash"
+import l from "lodash";
 
 export function ChatBubbles({
   messageInfo,
+  id,
 }: {
   messageInfo: proto.IWebMessageInfo;
+  id?: string;
 }) {
   const msgType = checkMessageType(messageInfo);
   const message = messageInfo.message;
@@ -21,19 +20,20 @@ export function ChatBubbles({
     if (l.includes(msgType, "extendedTextMessage")) {
       const extendedMessage = message.extendedTextMessage;
       if (extendedMessage) {
-        extendedContent = returnMessageBasedOnMessageType(
-          extendedMessage.contextInfo || null,
-        );
+        const context = extendedMessage.contextInfo;
+        if (context) {
+          extendedContent = getMessage(context);
+        }
       }
       participant = extendedMessage?.contextInfo?.participant;
     }
 
-    const content = returnMessageBasedOnMessageType(messageInfo);
+    const content = getMessage(messageInfo);
 
     return (
       <>
         {messageInfo.key.fromMe ? (
-          <div class="chat chat-end">
+          <div id={id} class="chat chat-end">
             <ChatBubble
               participant={participant}
               extendedContent={extendedContent}
@@ -43,7 +43,7 @@ export function ChatBubbles({
             />
           </div>
         ) : (
-          <>
+          <div id={id}>
             <small class="ml-4">
               {messageInfo.pushName || messageInfo.key.remoteJid}
             </small>
@@ -56,7 +56,7 @@ export function ChatBubbles({
                 isFromMe={false}
               />
             </div>
-          </>
+          </div>
         )}
       </>
     );
