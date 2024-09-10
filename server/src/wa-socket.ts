@@ -7,6 +7,8 @@ import makeWASocket, {
   // BinaryInfo,
   delay,
   DisconnectReason,
+  downloadContentFromMessage,
+  downloadMediaMessage,
   encodeWAM,
   // DisconnectReason,
   // downloadAndProcessHistorySyncNotification,
@@ -24,12 +26,14 @@ import makeWASocket, {
   WAMessageKey,
 } from "@whiskeysockets/baileys";
 import fs from "fs/promises";
+import path from "path";
 //import MAIN_LOGGER from '../src/Utils/logger'
 // import fs from "fs";
 import P from "pino";
 import { Boom } from "@hapi/boom";
 import { wss } from "src";
 import QRCode from "qrcode-svg";
+import { Transform } from "stream";
 
 export type Socket = ReturnType<typeof makeWASocket>;
 const logger = P(
@@ -42,6 +46,58 @@ const useStore = !process.argv.includes("--no-store");
 const doReplies = process.argv.includes("--do-reply");
 const usePairingCode = process.argv.includes("--use-pairing-code");
 const useMobile = process.argv.includes("--mobile");
+
+function sanitizeFileName(base64FileName: string) {
+  return base64FileName
+    .replace(/\//g, "_")
+    .replace(/\+/g, "-")
+    .replace(/=/g, "");
+}
+
+async function transformToBuffer(transformStream: Transform): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+
+  return new Promise<Buffer>((resolve, reject) => {
+    transformStream.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    transformStream.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+
+    transformStream.on("error", (err) => {
+      reject(err);
+    });
+  });
+}
+
+// Helper function to write buffer to file
+async function writeFileToPublicDir(
+  buffer: Buffer,
+  ext: string,
+  filename: string,
+) {
+  const publicPath = path.join(__dirname, "public");
+
+  try {
+    await fs.access(publicPath);
+  } catch {
+    await fs.mkdir(publicPath);
+  }
+
+  const filePath = path.join(publicPath, `${filename}.${ext}`);
+  await fs.writeFile(filePath, buffer);
+}
+
+// Function to handle media messages (image, video, sticker)
+async function handleMediaMessage(
+  buffer: Buffer,
+  filename: string,
+  ext: string,
+) {
+  await writeFileToPublicDir(buffer, ext, filename);
+}
 
 // external map to store retry counts of messages when decryption/encryption fails
 // keep this out of the socket itself, so as to prevent a message decryption/encryption loop across socket restarts
@@ -237,6 +293,66 @@ export const startSock = async () => {
       // received a new message
       if (events["messages.upsert"]) {
         const upsert = events["messages.upsert"];
+        const m = upsert.messages[0];
+        if (m) {
+          const message = m.message;
+          if (message) {
+            const messageType = Object.keys(message)[0] as
+              | keyof proto.IMessage
+              | undefined;
+
+            if (
+              messageType &&
+              (messageType === "imageMessage" || messageType === "videoMessage")
+            ) {
+              const hashstring = Buffer.from(
+                message[messageType]!.fileSha256!,
+              ).toString("base64");
+              const mime = message[messageType]!.mimetype;
+              if (mime) {
+                const ext = mime.split("/");
+                const buffer = await downloadMediaMessage(
+                  m,
+                  "buffer",
+                  {},
+                  { logger, reuploadRequest: sock.updateMediaMessage },
+                );
+                await handleMediaMessage(
+                  buffer,
+                  sanitizeFileName(hashstring),
+                  ext[1]!,
+                );
+              }
+            }
+
+            if (messageType === "stickerMessage") {
+              const hashstring = Buffer.from(
+                message["stickerMessage"]!.fileSha256!,
+              ).toString("base64");
+              const mime = message[messageType]!.mimetype;
+              if (mime) {
+                const ext = mime.split("/");
+                const stream = await downloadContentFromMessage(
+                  {
+                    url: `https://mmg.whatsapp.net${message["stickerMessage"]!.directPath}`,
+                    mediaKey: message["stickerMessage"]!.mediaKey,
+                    directPath: message["stickerMessage"]!.directPath,
+                  },
+                  "sticker",
+                  {},
+                );
+                const buffer = await transformToBuffer(stream);
+                await handleMediaMessage(
+                  buffer,
+                  sanitizeFileName(hashstring),
+                  ext[1]!,
+                );
+              }
+            }
+          }
+        }
+
+        // TODO: transform sticker/video, then send it
         console.log("recv messages ", JSON.stringify(upsert, undefined, 2));
         wss.clients.forEach((client) => {
           client.send(

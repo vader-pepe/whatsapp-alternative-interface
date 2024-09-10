@@ -1,4 +1,4 @@
-import { Content } from "../content";
+import { JSX } from "solid-js/jsx-runtime";
 
 export function ChatBubble({
   participant,
@@ -8,8 +8,8 @@ export function ChatBubble({
   isFromMe,
 }: {
   participant?: string | null;
-  extendedContent?: string | null;
-  mainContent: string | null;
+  extendedContent?: JSX.Element;
+  mainContent: JSX.Element;
   bubbleStyle: string;
   isFromMe: boolean;
 }) {
@@ -20,10 +20,10 @@ export function ChatBubble({
           class={`"px-2 py-1 ${isFromMe ? "bg-blue-300" : "bg-gray-700"} ${isFromMe ? "text-black" : "text-white"} rounded-t-md flex flex-col text-left`}
         >
           {participant ? <small>{participant}</small> : null}
-          <Content c={extendedContent} />
+          {extendedContent}
         </div>
       ) : null}
-      <Content c={mainContent} />
+      {mainContent}
     </div>
   );
 }

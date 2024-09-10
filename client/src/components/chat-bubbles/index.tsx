@@ -1,7 +1,9 @@
 import { type proto } from "@whiskeysockets/baileys";
-import { checkMessageType, getMessage } from "../../utils/message";
+import { checkMessageType } from "../../utils/message";
 import { ChatBubble } from "./chat-bubble";
 import l from "lodash";
+import { GetMessage } from "../message";
+import { JSX } from "solid-js/jsx-runtime";
 
 export function ChatBubbles({
   messageInfo,
@@ -12,23 +14,39 @@ export function ChatBubbles({
 }) {
   const msgType = checkMessageType(messageInfo);
   const message = messageInfo.message;
-  let extendedContent: string | null = null;
+  let extendedContent: JSX.Element | null = null;
   let participant: string | null | undefined = null;
+
+  const setContextAndParticipant = (context: proto.IContextInfo) => {
+    extendedContent = GetMessage({ messageInfo: context });
+    participant = context.participant;
+  };
 
   if (message && msgType !== null) {
     participant = message.chat?.displayName;
     if (l.includes(msgType, "extendedTextMessage")) {
-      const extendedMessage = message.extendedTextMessage;
-      if (extendedMessage) {
-        const context = extendedMessage.contextInfo;
-        if (context) {
-          extendedContent = getMessage(context);
-        }
+      const context = message.extendedTextMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
       }
-      participant = extendedMessage?.contextInfo?.participant;
+    } else if (l.includes(msgType, "stickerMessage")) {
+      const context = message.stickerMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if (l.includes(msgType, "videoMessage")) {
+      const context = message.videoMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if (l.includes(msgType, "imageMessage")) {
+      const context = message.imageMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
     }
 
-    const content = getMessage(messageInfo);
+    const content = GetMessage({ messageInfo });
 
     return (
       <>

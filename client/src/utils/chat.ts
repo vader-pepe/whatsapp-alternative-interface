@@ -1,7 +1,6 @@
 import { type proto, type Chat } from "@whiskeysockets/baileys";
-import { getMessage } from "./message";
 import l from "lodash";
-import { Content } from "../components/content";
+import { GetMessage } from "../components/message";
 
 /**
  * Sets up the chat to only shows first message in home
@@ -12,8 +11,7 @@ export function setChatsRow(chat: Chat) {
   if (messages && messages.length > 0) {
     const firstMessageInfo = messages[0].message;
     if (firstMessageInfo) {
-      const c = getMessage(firstMessageInfo);
-      return Content({ c });
+      return GetMessage({ messageInfo: firstMessageInfo });
     }
     return null;
   }
@@ -41,7 +39,7 @@ export type ChatType = ReturnType<typeof chatType>;
 /**
  * Append incoming message to whichever chat its belong to
  */
-export function appendIncomingMessage(
+export function setsNewMessageToChat(
   remoteMsgs: proto.IWebMessageInfo[],
   chats: Chat[],
 ) {

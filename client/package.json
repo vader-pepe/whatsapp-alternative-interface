@@ -11,8 +11,8 @@
   "license": "MIT",
   "devDependencies": {
     "@types/lodash": "^4.17.7",
+    "@whiskeysockets/baileys": "^6.7.7",
     "autoprefixer": "^10.4.20",
-    "baileys": "link:@types/@whiskeysockets/baileys",
     "daisyui": "^4.12.10",
     "postcss": "^8.4.44",
     "solid-devtools": "^0.29.2",

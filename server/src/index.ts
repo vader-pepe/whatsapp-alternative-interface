@@ -1,9 +1,9 @@
 import express from "express";
+import path from "path";
 import { Socket, startSock, store } from "./wa-socket";
 import { convertMsToTime } from "./utils";
 import { WebSocket, WebSocketServer } from "ws";
 import cors from "cors";
-import { proto } from "@whiskeysockets/baileys";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -57,9 +57,6 @@ wss.on("connection", async function connection(ws) {
 
   ws.on("close", () => {
     console.log("Connection closed.");
-    if (s) {
-      s.end(new Error("Socket Closed"));
-    }
     if (currentConnection === ws) {
       currentConnection = null; // Clear the current connection if it was this one
     }
@@ -70,6 +67,7 @@ const timestamp = new Date();
 
 app.use(cors({}));
 app.use(express.json());
+app.use("/public", express.static(path.join(__dirname, "public")));
 app.get("/", function (_req, res) {
   const timediff = new Date().getTime() - timestamp.getTime();
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -115,11 +113,11 @@ app.get("/messages/:id", async function (req, res) {
   const chat = store.chats.get(chatId);
   const messages = store.messages[chatId];
 
-  if (!chat) {
-    return res.status(404).send("Chat Not Found");
+  if (messages && chat) {
+    return res.status(200).json({ messages });
   }
 
-  return res.status(200).json({ messages });
+  return res.status(404).send("Chat Not Found");
 });
 
 app.get("/contacts", async function (_req, res) {
@@ -134,8 +132,13 @@ app.post("/send/:id", async function (req, res) {
   const id = req.params.id;
   const text = req.body.text as string;
   if (s) {
-    await s.sendMessage(id, { text });
-    return res.status(200).send("OK");
+    try {
+      await s.sendMessage(id, { text });
+      return res.status(200).send("OK");
+    } catch (error) {
+      console.log(JSON.stringify(error));
+      return res.status(404).send("Something went wrong");
+    }
   }
   return res.status(404).send("No Data");
 });

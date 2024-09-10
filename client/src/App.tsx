@@ -6,7 +6,7 @@ import {
 } from "@whiskeysockets/baileys";
 import axios from "axios";
 import { createSignal, type Component, For } from "solid-js";
-import { appendIncomingMessage, chatType, setChatsRow } from "./utils/chat";
+import { setsNewMessageToChat, chatType, setChatsRow } from "./utils/chat";
 import { ChatBubbles } from "./components/chat-bubbles";
 
 const App: Component = () => {
@@ -76,7 +76,7 @@ const App: Component = () => {
 
     if (raw.messages) {
       const messages = JSON.parse(raw.messages) as proto.IWebMessageInfo[];
-      const incoming = appendIncomingMessage(messages, chats());
+      const incoming = setsNewMessageToChat(messages, chats());
       setChats(incoming);
     }
 
@@ -135,11 +135,6 @@ const App: Component = () => {
                         >
                           <h1>{chat.name || chat.id}</h1>
                           <small class="">{setChatsRow(chat)}</small>
-                          {chat.unreadCount && chat.unreadCount > 0 ? (
-                            <div class="absolute right-0 top-0 badge badge-primary badge-lg h-8">
-                              {chat.unreadCount}
-                            </div>
-                          ) : null}
                         </div>
                       </>
                     );
@@ -150,58 +145,58 @@ const App: Component = () => {
               }}
             </For>
           </div>
+
+          {showChatWindow() ? (
+            <div>
+              <div class="flex flex-col h-screen fixed inset-0 backdrop-blur-md z-10 px-3 py-4">
+                <div class="flex gap-4">
+                  <button onclick={() => closeChatWindow()}>
+                    <svg
+                      class="w-6 fill-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 448 512"
+                    >
+                      <path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.2 288 416 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-306.7 0L214.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z" />
+                    </svg>
+                  </button>
+                  <h1 class="font-semibold text-xl">
+                    {currentChat()?.name || currentChat()?.id}
+                  </h1>
+                </div>
+                <div
+                  ref={(el) => (containerRef = el)}
+                  class="mt-2 max-w-full max-h-[700px] min-h-[300px] py-3 px-2 border border-gray-700 rounded-md overflow-y-scroll overflow-x-hidden"
+                >
+                  <For
+                    each={currentChatMessages()}
+                    fallback={<div>Loading...</div>}
+                  >
+                    {(message, index) => {
+                      return <ChatBubbles messageInfo={message} />;
+                    }}
+                  </For>
+                </div>
+                <form
+                  class="w-full"
+                  onsubmit={async (e) => {
+                    e.preventDefault();
+                    await sendMessage(currentChat()?.id || "");
+                  }}
+                >
+                  <input
+                    oninput={(e) => setMessage(e.target.value)}
+                    value={message()}
+                    placeholder="Type a message"
+                    class="mt-2 textarea textarea-bordered w-full"
+                  />
+                </form>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : (
         <h1 class="text-5xl">{`:(`}</h1>
       )}
-
-      {showChatWindow() ? (
-        <div>
-          <div class="flex flex-col h-screen fixed inset-0 backdrop-blur-md z-10 px-3 py-4">
-            <div class="flex gap-4">
-              <button onclick={() => closeChatWindow()}>
-                <svg
-                  class="w-6 fill-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 448 512"
-                >
-                  <path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.2 288 416 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-306.7 0L214.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z" />
-                </svg>
-              </button>
-              <h1 class="font-semibold text-xl">
-                {currentChat()?.name || currentChat()?.id}
-              </h1>
-            </div>
-            <div
-              ref={(el) => (containerRef = el)}
-              class="mt-2 max-w-full max-h-[700px] min-h-[300px] py-3 px-2 border border-gray-700 rounded-md overflow-y-scroll overflow-x-hidden"
-            >
-              <For
-                each={currentChatMessages()}
-                fallback={<div>Loading...</div>}
-              >
-                {(message, index) => {
-                  return <ChatBubbles messageInfo={message} />;
-                }}
-              </For>
-            </div>
-            <form
-              class="w-full"
-              onsubmit={async (e) => {
-                e.preventDefault();
-                await sendMessage(currentChat()?.id || "");
-              }}
-            >
-              <input
-                oninput={(e) => setMessage(e.target.value)}
-                value={message()}
-                placeholder="Type a message"
-                class="mt-2 textarea textarea-bordered w-full"
-              />
-            </form>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 };
