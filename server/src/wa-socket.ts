@@ -131,6 +131,7 @@ export const startSock = async () => {
 
   const sock = makeWASocket({
     version,
+    defaultQueryTimeoutMs: 0,
     logger,
     printQRInTerminal: false,
     mobile: useMobile,
@@ -238,9 +239,6 @@ export const startSock = async () => {
 
         if (update.connection === "open") {
           console.log("qr already scanned");
-          wss.clients.forEach((client) => {
-            client.send(JSON.stringify({ qr: undefined }));
-          });
           wss.clients.forEach((client) => {
             client.send(JSON.stringify({ state: state.creds }, undefined, 2));
           });

@@ -23,6 +23,9 @@ importers:
       solid-js:
         specifier: ^1.8.11
         version: 1.8.22
+      ts-pattern:
+        specifier: ^5.3.1
+        version: 5.3.1
       vscroll:
         specifier: ^1.6.2
         version: 1.6.2
@@ -1391,6 +1394,9 @@ packages:
 
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
+
+  ts-pattern@5.3.1:
+    resolution: {integrity: sha512-1RUMKa8jYQdNfmnK4jyzBK3/PS/tnjcZ1CW0v1vWDeYe5RBklc/nquw03MEoB66hVBm4BnlCfmOqDVxHyT1DpA==}
 
   tslib@2.7.0:
     resolution: {integrity: sha512-gLXCKdN1/j47AiHiOkJN69hJmcbGTHI0ImLmbYLHykhgeN0jVGola9yVjFgzCUklsZQMW55o+dW7IXv3RCXDzA==}
@@ -2840,6 +2846,8 @@ snapshots:
       ieee754: 1.2.1
 
   ts-interface-checker@0.1.13: {}
+
+  ts-pattern@5.3.1: {}
 
   tslib@2.7.0: {}
 

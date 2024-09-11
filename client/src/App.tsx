@@ -1,61 +1,59 @@
 import {
   type proto,
   type Chat,
-  type WAMessage,
   type AuthenticationState,
 } from "@whiskeysockets/baileys";
 import axios from "axios";
-import { createSignal, type Component, For } from "solid-js";
+import { createSignal, type Component, For, createMemo } from "solid-js";
 import { setsNewMessageToChat, chatType, setChatsRow } from "./utils/chat";
-import { ChatBubbles } from "./components/chat-bubbles";
+import { createVirtualizer } from "@tanstack/solid-virtual";
+import { ChatWindow } from "./components/chat-window";
 
 const App: Component = () => {
   const socket = new WebSocket("ws://localhost:8081");
-  let containerRef: HTMLElement | null = null;
+  let container: HTMLElement | null = null;
   const [qr, setQr] = createSignal<string | undefined>(undefined);
   const [isConnectionEstablished, setIsConnectionEstablished] =
     createSignal(false);
   const [chats, setChats] = createSignal<Chat[]>([]);
   const [currentChat, setCurrentChat] = createSignal<Chat>();
-  const [message, setMessage] = createSignal<string>("");
-  const [currentChatMessages, setCurrentChatMessages] = createSignal<
-    WAMessage[]
-  >([]);
   const [showChatWindow, setShowChatWindow] = createSignal(false);
+
+  const rowVirtualizer = createMemo(() =>
+    createVirtualizer({
+      count: chats().length,
+      getScrollElement: () => container,
+      estimateSize: () => 85, // estimated height of each item in px
+      overscan: 5, // number of extra items to render in the viewport
+    }),
+  );
 
   async function getChats() {
     const d = await axios.get<{ chats: Chat[] }>(`http://localhost:3001/chats`);
     if (d.data) {
-      setChats(d.data.chats);
+      const transform = d.data.chats.filter(function (chat) {
+        if (
+          chatType(chat) !== "unknown" &&
+          chat.messages &&
+          chat.messages.length > 0 &&
+          setChatsRow(chat)
+        ) {
+          return true;
+        }
+        return false;
+      });
+      setChats(transform);
     }
   }
 
-  async function openChatWindow(chat: Chat) {
-    setCurrentChat(chat);
+  async function openChatWindow(chatId: Chat) {
+    setCurrentChat(chatId);
     setShowChatWindow(true);
-    const m = await axios.get<{ messages: WAMessage[] }>(
-      `http://localhost:3001/messages/${chat.id}`,
-    );
-    if (m.data) {
-      setCurrentChatMessages(m.data.messages);
-    }
-    setTimeout(function () {
-      if (containerRef) {
-        containerRef.scrollTop = containerRef.scrollHeight;
-      }
-    }, 0);
   }
 
   function closeChatWindow() {
-    setCurrentChat((_prev) => undefined);
+    setCurrentChat();
     setShowChatWindow(false);
-  }
-
-  async function sendMessage(id: string) {
-    await axios.post(`http://localhost:3001/send/${id}`, {
-      text: message(),
-    });
-    setMessage("");
   }
 
   // Connection opened
@@ -116,82 +114,45 @@ const App: Component = () => {
             </svg>
           </label>
 
-          <div class="flex flex-col gap-2 mt-14">
-            <For each={chats()}>
-              {(chat, index) => {
-                // WARNING: THIS WILL BE CATASTROPHIC
-                if (
-                  chatType(chat) !== "unknown" &&
-                  chat.messages &&
-                  chat.messages.length > 0
-                ) {
-                  if (setChatsRow(chat)) {
-                    return (
-                      <>
-                        <div
-                          onclick={() => openChatWindow(chat)}
-                          role="button"
-                          class="cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden"
-                        >
-                          <h1>{chat.name || chat.id}</h1>
-                          <small class="">{setChatsRow(chat)}</small>
-                        </div>
-                      </>
-                    );
-                  }
-                  return null;
-                }
-                return null;
+          <div
+            ref={(e) => (container = e)}
+            class="overflow-y-scroll overflow-x-hidden relative mt-16 max-h-[510px]"
+            style={{
+              height: `${rowVirtualizer().getTotalSize().toString()}px`,
+            }}
+          >
+            <For each={rowVirtualizer().getVirtualItems()}>
+              {(virtualRow) => {
+                return (
+                  <div
+                    class={`absolute w-full`}
+                    style={{ top: `${virtualRow.start}px` }}
+                  >
+                    <div
+                      onclick={() => openChatWindow(chats()[virtualRow.index])}
+                      role="button"
+                      class="cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden"
+                    >
+                      <h1>
+                        {chats()[virtualRow.index].name ||
+                          chats()[virtualRow.index].id}
+                      </h1>
+                      <small class="">
+                        {setChatsRow(chats()[virtualRow.index])}
+                      </small>
+                    </div>
+                  </div>
+                );
               }}
             </For>
           </div>
 
           {showChatWindow() ? (
-            <div>
-              <div class="flex flex-col h-screen fixed inset-0 backdrop-blur-md z-10 px-3 py-4">
-                <div class="flex gap-4">
-                  <button onclick={() => closeChatWindow()}>
-                    <svg
-                      class="w-6 fill-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 448 512"
-                    >
-                      <path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.2 288 416 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-306.7 0L214.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z" />
-                    </svg>
-                  </button>
-                  <h1 class="font-semibold text-xl">
-                    {currentChat()?.name || currentChat()?.id}
-                  </h1>
-                </div>
-                <div
-                  ref={(el) => (containerRef = el)}
-                  class="mt-2 max-w-full max-h-[700px] min-h-[300px] py-3 px-2 border border-gray-700 rounded-md overflow-y-scroll overflow-x-hidden"
-                >
-                  <For
-                    each={currentChatMessages()}
-                    fallback={<div>Loading...</div>}
-                  >
-                    {(message, index) => {
-                      return <ChatBubbles messageInfo={message} />;
-                    }}
-                  </For>
-                </div>
-                <form
-                  class="w-full"
-                  onsubmit={async (e) => {
-                    e.preventDefault();
-                    await sendMessage(currentChat()?.id || "");
-                  }}
-                >
-                  <input
-                    oninput={(e) => setMessage(e.target.value)}
-                    value={message()}
-                    placeholder="Type a message"
-                    class="mt-2 textarea textarea-bordered w-full"
-                  />
-                </form>
-              </div>
-            </div>
+            <ChatWindow
+              currentChat={currentChat()}
+              closeChatWindow={closeChatWindow}
+              socket={socket}
+            />
           ) : null}
         </>
       ) : (

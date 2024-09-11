@@ -1,4 +1,5 @@
-import { proto } from "@whiskeysockets/baileys";
+import { type proto } from "@whiskeysockets/baileys";
+import { match, P } from "ts-pattern";
 
 /**
  * Function to get the contents of the said message
@@ -21,8 +22,6 @@ export function GetMessage({
     message = messageInfo.editedMessage;
   }
 
-  if (!message) return null;
-
   if ("reactions" in messageInfo) {
     const r = messageInfo.reactions;
     if (r) {
@@ -30,90 +29,145 @@ export function GetMessage({
     }
   }
 
-  if (message.conversation) {
-    return <small>{message.conversation}</small>;
-  }
+  if (!message) return null;
+  const res = match(message)
+    .with({ conversation: P.any }, () => <small>{message.conversation}</small>)
+    .with({ imageMessage: P.any }, () => {
+      const caption = message.imageMessage!.caption;
+      if (caption)
+        return (
+          <>
+            <span class="loading loading-spinner loading-md block"></span>{" "}
+            <small>{caption}</small>
+          </>
+        );
+      return <span class="loading loading-spinner loading-md block"></span>;
+    })
+    .with({ videoMessage: P.any }, () => {
+      const caption = message.videoMessage!.caption;
+      if (caption) {
+        return (
+          <>
+            <span class="loading loading-spinner loading-md block"></span>{" "}
+            <small>{caption}</small>
+          </>
+        );
+      }
+      return <span class="loading loading-spinner loading-md block"></span>;
+    })
+    .with({ stickerMessage: P.any }, () => (
+      <span class="loading loading-spinner loading-md block"></span>
+    ))
+    .with({ reactionMessage: P.any }, () => (
+      <small>reacted: {message.reactionMessage!.text}</small>
+    ))
+    .with({ extendedTextMessage: P.any }, () => {
+      const text = message.extendedTextMessage!.text;
+      if (text) {
+        return <small>{text}</small>;
+      }
+      return JSON.stringify(message.extendedTextMessage);
+    })
+    .with({ viewOnceMessageV2: P.any }, () =>
+      GetMessage({ messageInfo: message.viewOnceMessageV2! }),
+    )
+    .with({ editedMessage: P.any }, () =>
+      GetMessage({ messageInfo: message.editedMessage! }),
+    )
+    .with({ protocolMessage: P.any }, () => {
+      const edited = message.protocolMessage!.editedMessage;
+      if (!edited) {
+        return JSON.stringify(message.protocolMessage);
+      }
+      return GetMessage({ messageInfo: message.protocolMessage! });
+    })
+    .with({ viewOnceMessageV2Extension: P.any }, () =>
+      GetMessage({ messageInfo: message.viewOnceMessageV2Extension! }),
+    )
+    .otherwise(() => JSON.stringify(message));
 
-  if (message.imageMessage) {
-    const text = message.imageMessage.caption;
-    const encription = message.imageMessage.fileSha256 as unknown as
-      | string
-      | null
-      | undefined;
-    const mime = message.imageMessage.mimetype;
+  // if (message.conversation) {
+  //   return <small>{message.conversation}</small>;
+  // }
+  //
+  // if (message.imageMessage) {
+  //   const text = message.imageMessage.caption;
+  //   const encription = message.imageMessage.fileSha256 as unknown as
+  //     | string
+  //     | null
+  //     | undefined;
+  //   const mime = message.imageMessage.mimetype;
+  //
+  //   // if (text && mime && encription) {
+  //   //   const ext = mime.split("/");
+  //   //   return (
+  //   //     <>
+  //   //       <img
+  //   //         src={`data:${message.imageMessage.mimetype};base64, ${message.imageMessage.jpegThumbnail}`}
+  //   //       />
+  //   //       <small>{text}</small>
+  //   //     </>
+  //   //   );
+  //   // }
+  //   //
+  //   // if (mime && encription) {
+  //   //   return (
+  //   //     <img
+  //   //       src={`data:${message.imageMessage.mimetype};base64, ${message.imageMessage.jpegThumbnail}`}
+  //   //       alt="not yet fetched"
+  //   //     />
+  //   //   );
+  //   // }
+  //   return <span class="loading loading-spinner loading-md"></span>;
+  // }
+  //
+  // if (message.videoMessage) {
+  //   return <span class="loading loading-spinner loading-md"></span>;
+  //   // return <img src="/video.jpeg" />;
+  // }
+  //
+  // if (message.stickerMessage) {
+  //   return <span class="loading loading-spinner loading-md"></span>;
+  //   // const mime = message.stickerMessage.mimetype;
+  //   // const encription = message.stickerMessage.fileSha256 as unknown as string;
+  //   // if (mime && encription) {
+  //   //   const ext = mime.split("/");
+  //   //   return <img src={``} alt="not yet fetched" />;
+  //   // }
+  //   // return <img src="/sticker.jpeg" />;
+  // }
+  //
+  // if (message.extendedTextMessage) {
+  //   const text = message.extendedTextMessage.text;
+  //   if (text) return <small>{text}</small>;
+  // }
+  //
+  // if (message.reactionMessage) {
+  //   const text = message.reactionMessage.text;
+  //   if (text) {
+  //     return <small>reacted: {text}</small>;
+  //   }
+  // }
+  //
+  // if (message.viewOnceMessageV2) {
+  //   return GetMessage({ messageInfo: message.viewOnceMessageV2 });
+  // }
+  //
+  // if (message.editedMessage) {
+  //   return GetMessage({ messageInfo: message.editedMessage });
+  // }
+  //
+  // if (message.protocolMessage) {
+  //   const edited = message.protocolMessage.editedMessage;
+  //   if (!edited) {
+  //     return JSON.stringify(message.protocolMessage);
+  //   }
+  //   return GetMessage({ messageInfo: message.protocolMessage });
+  // }
+  //
+  // if (message.viewOnceMessageV2Extension) {
+  //   return GetMessage({ messageInfo: message.viewOnceMessageV2Extension });
+  // }
 
-    if (text && mime && encription) {
-      const ext = mime.split("/");
-      return (
-        <>
-          <img
-            src={`data:${message.imageMessage.mimetype};base64, ${message.imageMessage.jpegThumbnail}`}
-          />
-          <small>{text}</small>
-        </>
-      );
-    }
-
-    if (mime && encription) {
-      return (
-        <img
-          src={`data:${message.imageMessage.mimetype};base64, ${message.imageMessage.jpegThumbnail}`}
-          alt="not yet fetched"
-        />
-      );
-    }
-  }
-
-  if (message.videoMessage) {
-    return <img src="/video.jpeg" />;
-  }
-
-  if (message.stickerMessage) {
-    const mime = message.stickerMessage.mimetype;
-    const encription = message.stickerMessage.fileSha256 as unknown as string;
-    if (mime && encription) {
-      const ext = mime.split("/");
-      return <img src={``} alt="not yet fetched" />;
-    }
-    return <img src="/sticker.jpeg" />;
-  }
-
-  if (message.extendedTextMessage) {
-    const text = message.extendedTextMessage.text;
-    if (text) return <small>{text}</small>;
-  }
-
-  if (message.reactionMessage) {
-    const text = message.reactionMessage.text;
-    if (text) {
-      return <small>reacted: {text}</small>;
-    }
-  }
-
-  if (message.viewOnceMessageV2) {
-    return GetMessage({ messageInfo: message.viewOnceMessageV2 });
-  }
-
-  if (message.editedMessage) {
-    return GetMessage({ messageInfo: message.editedMessage });
-  }
-
-  if (message.protocolMessage) {
-    const edited = message.protocolMessage.editedMessage;
-    if (!edited) {
-      return JSON.stringify(message.protocolMessage);
-    }
-    return GetMessage({ messageInfo: message.protocolMessage });
-  }
-
-  if (message.viewOnceMessageV2Extension) {
-    return GetMessage({ messageInfo: message.viewOnceMessageV2Extension });
-  }
-
-  return (
-    <>
-      <img src="/unimplemented.jpeg" />
-      debug: {JSON.stringify(message)}
-    </>
-  );
+  return res;
 }

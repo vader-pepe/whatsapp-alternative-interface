@@ -5,6 +5,27 @@ import { convertMsToTime } from "./utils";
 import { WebSocket, WebSocketServer } from "ws";
 import cors from "cors";
 
+export interface MessageError {
+  data: null;
+  isBoom: boolean;
+  isServer: boolean;
+  output: Output;
+}
+
+export interface Output {
+  statusCode: number;
+  payload: Payload;
+  headers: Headers;
+}
+
+export interface Headers {}
+
+export interface Payload {
+  statusCode: number;
+  error: string;
+  message: string;
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 export const wss = new WebSocketServer({
@@ -33,7 +54,7 @@ export const wss = new WebSocketServer({
 let currentConnection: WebSocket | null;
 let s: Socket | null;
 wss.on("connection", async function connection(ws) {
-  console.log("selamat datang di indomaret");
+  console.log("Websocket connection established");
   if (!s) {
     s = await startSock();
   }
@@ -57,6 +78,10 @@ wss.on("connection", async function connection(ws) {
 
   ws.on("close", () => {
     console.log("Connection closed.");
+    if (s) {
+      s.end(new Error("Socket Closed"));
+      // s = null;
+    }
     if (currentConnection === ws) {
       currentConnection = null; // Clear the current connection if it was this one
     }
@@ -103,8 +128,10 @@ app.get("/chats", async function (_req, res) {
   return res.status(200).json({ chats });
 });
 
-app.get("/messages/:id", async function (req, res) {
+app.get("/messages/:id/:offset/:limit", async function (req, res) {
   const chatId = req.params.id;
+  const offset = Number(req.params.offset);
+  const limit = Number(req.params.limit);
 
   if (!store) {
     return res.status(404).send("No Data");
@@ -114,10 +141,16 @@ app.get("/messages/:id", async function (req, res) {
   const messages = store.messages[chatId];
 
   if (messages && chat) {
-    return res.status(200).json({ messages });
+    const clone = [...messages.array];
+    const transform = clone.slice(-offset - limit, -offset || undefined);
+    return res.status(200).json({ messages: transform });
   }
 
   return res.status(404).send("Chat Not Found");
+});
+
+app.get("/media", async function (_req, res) {
+  return res.status(404).send("Not found");
 });
 
 app.get("/contacts", async function (_req, res) {
@@ -133,6 +166,7 @@ app.post("/send/:id", async function (req, res) {
   const text = req.body.text as string;
   if (s) {
     try {
+      // TODO: handle sudden connection drop here
       await s.sendMessage(id, { text });
       return res.status(200).send("OK");
     } catch (error) {
