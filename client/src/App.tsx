@@ -88,7 +88,7 @@ const App: Component = () => {
 
   return (
     <div
-      class={`relative py-3 px-4 h-screen ${!isConnectionEstablished() ? "flex justify-center items-center" : ""} `}
+      class={`relative py-3 px-4 ${!isConnectionEstablished() ? "flex justify-center items-center" : ""} `}
     >
       {qr() ? (
         <div class="h-screen flex justify-center items-center absolute inset-0 backdrop-blur-md z-10">
@@ -116,35 +116,40 @@ const App: Component = () => {
 
           <div
             ref={(e) => (container = e)}
-            class="overflow-y-scroll overflow-x-hidden relative mt-16 max-h-[510px]"
-            style={{
-              height: `${rowVirtualizer().getTotalSize().toString()}px`,
-            }}
+            class={`overflow-y-scroll overflow-x-hidden relative mt-16 mb-32 max-h-[700px]`}
           >
-            <For each={rowVirtualizer().getVirtualItems()}>
-              {(virtualRow) => {
-                return (
-                  <div
-                    class={`absolute w-full`}
-                    style={{ top: `${virtualRow.start}px` }}
-                  >
-                    <div
-                      onclick={() => openChatWindow(chats()[virtualRow.index])}
-                      role="button"
-                      class="cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden"
-                    >
-                      <h1>
-                        {chats()[virtualRow.index].name ||
-                          chats()[virtualRow.index].id}
-                      </h1>
-                      <small class="">
-                        {setChatsRow(chats()[virtualRow.index])}
-                      </small>
-                    </div>
-                  </div>
-                );
+            <div
+              style={{
+                height: `${rowVirtualizer().getTotalSize().toString()}px`,
               }}
-            </For>
+            >
+              <For each={rowVirtualizer().getVirtualItems()}>
+                {(virtualRow) => {
+                  return (
+                    <div
+                      class={`absolute w-full`}
+                      style={{ top: `${virtualRow.start}px` }}
+                    >
+                      <div
+                        onclick={() =>
+                          openChatWindow(chats()[virtualRow.index])
+                        }
+                        role="button"
+                        class="cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden"
+                      >
+                        <h1>
+                          {chats()[virtualRow.index].name ||
+                            chats()[virtualRow.index].id}
+                        </h1>
+                        <small class="">
+                          {setChatsRow(chats()[virtualRow.index])}
+                        </small>
+                      </div>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
           </div>
 
           {showChatWindow() ? (

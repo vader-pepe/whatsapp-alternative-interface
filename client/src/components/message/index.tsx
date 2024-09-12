@@ -1,4 +1,4 @@
-import { type proto } from "@whiskeysockets/baileys";
+import { proto } from "@whiskeysockets/baileys";
 import { match, P } from "ts-pattern";
 
 /**
@@ -14,6 +14,7 @@ export function GetMessage({
     | proto.Message.IProtocolMessage;
 }) {
   let message: proto.IMessage | undefined | null = null;
+  let mediaUrl = `http://localhost:3001/media/`;
   if ("message" in messageInfo) {
     message = messageInfo.message;
   } else if ("quotedMessage" in messageInfo) {
@@ -30,34 +31,48 @@ export function GetMessage({
   }
 
   if (!message) return null;
+  if ("key" in messageInfo) {
+    let chatId = `${messageInfo.key!.remoteJid}`;
+    mediaUrl += `${chatId}/${messageInfo.key!.id}`;
+  }
   const res = match(message)
     .with({ conversation: P.any }, () => <small>{message.conversation}</small>)
     .with({ imageMessage: P.any }, () => {
       const caption = message.imageMessage!.caption;
+
       if (caption)
         return (
           <>
-            <span class="loading loading-spinner loading-md block"></span>{" "}
+            <img src={mediaUrl} alt="link broken or missing from server" />{" "}
             <small>{caption}</small>
           </>
         );
-      return <span class="loading loading-spinner loading-md block"></span>;
+      return <img src={mediaUrl} alt="link broken or missing from server" />;
     })
     .with({ videoMessage: P.any }, () => {
       const caption = message.videoMessage!.caption;
       if (caption) {
         return (
           <>
-            <span class="loading loading-spinner loading-md block"></span>{" "}
+            <img src={mediaUrl} alt="link broken or missing from server" />{" "}
             <small>{caption}</small>
           </>
         );
       }
-      return <span class="loading loading-spinner loading-md block"></span>;
+      return <img src={mediaUrl} alt="link broken or missing from server" />;
     })
-    .with({ stickerMessage: P.any }, () => (
-      <span class="loading loading-spinner loading-md block"></span>
-    ))
+    .with({ stickerMessage: P.any }, () => {
+      return (
+        <small>
+          sticker:{" "}
+          <img
+            src={mediaUrl}
+            alt="link broken or missing from server"
+            class="w-16"
+          />
+        </small>
+      );
+    })
     .with({ reactionMessage: P.any }, () => (
       <small>reacted: {message.reactionMessage!.text}</small>
     ))

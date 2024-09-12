@@ -36,7 +36,7 @@ import QRCode from "qrcode-svg";
 import { Transform } from "stream";
 
 export type Socket = ReturnType<typeof makeWASocket>;
-const logger = P(
+export const logger = P(
   { timestamp: () => `,"time":"${new Date().toJSON()}"` },
   P.destination("./wa-logs.txt"),
 );
@@ -54,7 +54,9 @@ function sanitizeFileName(base64FileName: string) {
     .replace(/=/g, "");
 }
 
-async function transformToBuffer(transformStream: Transform): Promise<Buffer> {
+export async function transformToBuffer(
+  transformStream: Transform,
+): Promise<Buffer> {
   const chunks: Buffer[] = [];
 
   return new Promise<Buffer>((resolve, reject) => {
@@ -131,7 +133,7 @@ export const startSock = async () => {
 
   const sock = makeWASocket({
     version,
-    defaultQueryTimeoutMs: 0,
+    defaultQueryTimeoutMs: undefined,
     logger,
     printQRInTerminal: false,
     mobile: useMobile,
@@ -291,66 +293,7 @@ export const startSock = async () => {
       // received a new message
       if (events["messages.upsert"]) {
         const upsert = events["messages.upsert"];
-        const m = upsert.messages[0];
-        if (m) {
-          const message = m.message;
-          if (message) {
-            const messageType = Object.keys(message)[0] as
-              | keyof proto.IMessage
-              | undefined;
 
-            if (
-              messageType &&
-              (messageType === "imageMessage" || messageType === "videoMessage")
-            ) {
-              const hashstring = Buffer.from(
-                message[messageType]!.fileSha256!,
-              ).toString("base64");
-              const mime = message[messageType]!.mimetype;
-              if (mime) {
-                const ext = mime.split("/");
-                const buffer = await downloadMediaMessage(
-                  m,
-                  "buffer",
-                  {},
-                  { logger, reuploadRequest: sock.updateMediaMessage },
-                );
-                await handleMediaMessage(
-                  buffer,
-                  sanitizeFileName(hashstring),
-                  ext[1]!,
-                );
-              }
-            }
-
-            if (messageType === "stickerMessage") {
-              const hashstring = Buffer.from(
-                message["stickerMessage"]!.fileSha256!,
-              ).toString("base64");
-              const mime = message[messageType]!.mimetype;
-              if (mime) {
-                const ext = mime.split("/");
-                const stream = await downloadContentFromMessage(
-                  {
-                    url: `https://mmg.whatsapp.net${message["stickerMessage"]!.directPath}`,
-                    mediaKey: message["stickerMessage"]!.mediaKey,
-                    directPath: message["stickerMessage"]!.directPath,
-                  },
-                  "sticker",
-                  {},
-                );
-                const buffer = await transformToBuffer(stream);
-                await handleMediaMessage(
-                  buffer,
-                  sanitizeFileName(hashstring),
-                  ext[1]!,
-                );
-              }
-            }
-          }
-        }
-
-        // TODO: transform sticker/video, then send it
         console.log("recv messages ", JSON.stringify(upsert, undefined, 2));
         wss.clients.forEach((client) => {
           client.send(

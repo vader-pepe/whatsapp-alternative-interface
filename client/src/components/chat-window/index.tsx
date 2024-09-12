@@ -96,7 +96,7 @@ export function ChatWindow({
             onclick={async () => {
               await fetchData(offset() + 5);
             }}
-            class="btn btn-outline btn-info"
+            class="btn btn-outline"
           >
             Load Previous
           </button>

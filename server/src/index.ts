@@ -1,9 +1,20 @@
 import express from "express";
 import path from "path";
-import { Socket, startSock, store } from "./wa-socket";
+import {
+  logger,
+  Socket,
+  startSock,
+  store,
+  transformToBuffer,
+} from "./wa-socket";
 import { convertMsToTime } from "./utils";
 import { WebSocket, WebSocketServer } from "ws";
 import cors from "cors";
+import {
+  downloadContentFromMessage,
+  downloadMediaMessage,
+  type proto,
+} from "@whiskeysockets/baileys";
 
 export interface MessageError {
   data: null;
@@ -78,10 +89,10 @@ wss.on("connection", async function connection(ws) {
 
   ws.on("close", () => {
     console.log("Connection closed.");
-    if (s) {
-      s.end(new Error("Socket Closed"));
-      // s = null;
-    }
+    // if (s) {
+    // s.end(new Error("Socket Closed"));
+    // s = null;
+    // }
     if (currentConnection === ws) {
       currentConnection = null; // Clear the current connection if it was this one
     }
@@ -136,7 +147,6 @@ app.get("/messages/:id/:offset/:limit", async function (req, res) {
   if (!store) {
     return res.status(404).send("No Data");
   }
-
   const chat = store.chats.get(chatId);
   const messages = store.messages[chatId];
 
@@ -149,8 +159,100 @@ app.get("/messages/:id/:offset/:limit", async function (req, res) {
   return res.status(404).send("Chat Not Found");
 });
 
-app.get("/media", async function (_req, res) {
-  return res.status(404).send("Not found");
+app.get("/media/:chatId/:id", async function (req, res) {
+  const chatId = req.params.chatId;
+  const id = req.params.id;
+  if (!store) {
+    return res.status(404).send("No Data");
+  }
+
+  const messages = store.messages[chatId];
+  if (messages) {
+    const clone = [...messages.array];
+    const filtered = clone.filter(function (m) {
+      const keyId = m.key.id;
+      if (keyId === id) {
+        return true;
+      }
+      return false;
+    });
+    const m = filtered[0];
+    if (m) {
+      const message = m.message;
+      if (message) {
+        const messageType = Object.keys(message)[0] as
+          | keyof proto.IMessage
+          | undefined;
+        if (messageType) {
+          if (messageType === "videoMessage") {
+            const mime = message[messageType]!.mimetype;
+            if (mime && s) {
+              try {
+                const stream = await downloadContentFromMessage(
+                  {
+                    url: message[messageType]!.url,
+                    mediaKey: message[messageType]!.mediaKey,
+                    directPath: message[messageType]!.directPath,
+                  },
+                  "thumbnail-video",
+                  {},
+                );
+                const buffer = await transformToBuffer(stream);
+                res.set("Content-Type", mime);
+                return res.status(200).send(buffer);
+              } catch (error) {
+                console.log(JSON.stringify(error));
+                return res.status(400).send("Something went wrong");
+              }
+            }
+          }
+
+          if (messageType === "imageMessage") {
+            const mime = message[messageType]!.mimetype;
+            if (mime && s) {
+              try {
+                const buffer = await downloadMediaMessage(
+                  m,
+                  "buffer",
+                  {},
+                  { logger: logger, reuploadRequest: s.updateMediaMessage },
+                );
+                res.set("Content-Type", mime);
+                return res.status(200).send(buffer);
+              } catch (error) {
+                console.log(JSON.stringify(error));
+                return res.status(400).send("Something went wrong");
+              }
+            }
+          }
+
+          if (messageType === "stickerMessage") {
+            const mime = message[messageType]!.mimetype;
+            if (mime) {
+              try {
+                const stream = await downloadContentFromMessage(
+                  {
+                    url: `https://mmg.whatsapp.net${message["stickerMessage"]!.directPath}`,
+                    mediaKey: message["stickerMessage"]!.mediaKey,
+                    directPath: message["stickerMessage"]!.directPath,
+                  },
+                  "sticker",
+                  {},
+                );
+                const buffer = await transformToBuffer(stream);
+                res.set("Content-Type", mime);
+                return res.status(200).send(buffer);
+              } catch (error) {
+                console.log(JSON.stringify(error));
+                return res.status(400).send("Something went wrong");
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return res.status(404).send("No chat found");
 });
 
 app.get("/contacts", async function (_req, res) {
