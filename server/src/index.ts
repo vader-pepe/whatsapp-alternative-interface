@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import {
   logger,
+  sendMessageWTyping,
   Socket,
   startSock,
   store,
@@ -11,6 +12,7 @@ import { convertMsToTime } from "./utils";
 import { WebSocket, WebSocketServer } from "ws";
 import cors from "cors";
 import {
+  delay,
   downloadContentFromMessage,
   downloadMediaMessage,
   type proto,
@@ -180,21 +182,24 @@ app.get("/media/:chatId/:id", async function (req, res) {
     if (m) {
       const message = m.message;
       if (message) {
+        if ("senderKeyDistributionMessage" in message) {
+          delete message["senderKeyDistributionMessage"];
+        }
         const messageType = Object.keys(message)[0] as
           | keyof proto.IMessage
           | undefined;
         if (messageType) {
           if (messageType === "videoMessage") {
-            const mime = message[messageType]!.mimetype;
-            if (mime && s) {
+            const mime = message["videoMessage"]!.mimetype;
+            if (mime) {
               try {
                 const stream = await downloadContentFromMessage(
                   {
-                    url: message[messageType]!.url,
-                    mediaKey: message[messageType]!.mediaKey,
-                    directPath: message[messageType]!.directPath,
+                    url: message["videoMessage"]!.url,
+                    mediaKey: message["videoMessage"]!.mediaKey,
+                    directPath: message["videoMessage"]!.directPath,
                   },
-                  "thumbnail-video",
+                  "video",
                   {},
                 );
                 const buffer = await transformToBuffer(stream);
@@ -208,7 +213,7 @@ app.get("/media/:chatId/:id", async function (req, res) {
           }
 
           if (messageType === "imageMessage") {
-            const mime = message[messageType]!.mimetype;
+            const mime = message["imageMessage"]!.mimetype;
             if (mime && s) {
               try {
                 const buffer = await downloadMediaMessage(
@@ -249,6 +254,8 @@ app.get("/media/:chatId/:id", async function (req, res) {
             }
           }
         }
+        console.log(JSON.stringify(message));
+        return res.status(404).send("Wrongly formatted data!");
       }
     }
   }
@@ -263,19 +270,23 @@ app.get("/contacts", async function (_req, res) {
   return res.status(404).send("No Data");
 });
 
+// TODO: wait 30s for first message send to prevent
+//'Precondition Required' error
 app.post("/send/:id", async function (req, res) {
   const id = req.params.id;
   const text = req.body.text as string;
   if (s) {
     try {
       // TODO: handle sudden connection drop here
-      await s.sendMessage(id, { text });
+      // await s.sendMessage(id, { text });
+      await sendMessageWTyping({ text }, id);
       return res.status(200).send("OK");
     } catch (error) {
       console.log(JSON.stringify(error));
       return res.status(404).send("Something went wrong");
     }
   }
+
   return res.status(404).send("No Data");
 });
 

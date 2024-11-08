@@ -54,12 +54,11 @@ export function GetMessage({
       if (caption) {
         return (
           <>
-            <img src={mediaUrl} alt="link broken or missing from server" />{" "}
-            <small>{caption}</small>
+            <video src={mediaUrl} /> <small>{caption}</small>
           </>
         );
       }
-      return <img src={mediaUrl} alt="link broken or missing from server" />;
+      return <video src={mediaUrl} />;
     })
     .with({ stickerMessage: P.any }, () => {
       return (

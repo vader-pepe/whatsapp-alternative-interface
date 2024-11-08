@@ -116,7 +116,7 @@ const App: Component = () => {
 
           <div
             ref={(e) => (container = e)}
-            class={`overflow-y-scroll overflow-x-hidden relative mt-16 mb-32 max-h-[700px]`}
+            class={`overflow-y-scroll overflow-x-hidden relative mt-16 mb-32 max-h-screen`}
           >
             <div
               style={{

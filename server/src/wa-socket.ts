@@ -35,6 +35,10 @@ import { wss } from "src";
 import QRCode from "qrcode-svg";
 import { Transform } from "stream";
 
+export let sendMessageWTyping: (
+  msg: AnyMessageContent,
+  jid: string,
+) => Promise<void> | null;
 export type Socket = ReturnType<typeof makeWASocket>;
 export const logger = P(
   { timestamp: () => `,"time":"${new Date().toJSON()}"` },
@@ -46,13 +50,6 @@ const useStore = !process.argv.includes("--no-store");
 const doReplies = process.argv.includes("--do-reply");
 const usePairingCode = process.argv.includes("--use-pairing-code");
 const useMobile = process.argv.includes("--mobile");
-
-function sanitizeFileName(base64FileName: string) {
-  return base64FileName
-    .replace(/\//g, "_")
-    .replace(/\+/g, "-")
-    .replace(/=/g, "");
-}
 
 export async function transformToBuffer(
   transformStream: Transform,
@@ -72,33 +69,6 @@ export async function transformToBuffer(
       reject(err);
     });
   });
-}
-
-// Helper function to write buffer to file
-async function writeFileToPublicDir(
-  buffer: Buffer,
-  ext: string,
-  filename: string,
-) {
-  const publicPath = path.join(__dirname, "public");
-
-  try {
-    await fs.access(publicPath);
-  } catch {
-    await fs.mkdir(publicPath);
-  }
-
-  const filePath = path.join(publicPath, `${filename}.${ext}`);
-  await fs.writeFile(filePath, buffer);
-}
-
-// Function to handle media messages (image, video, sticker)
-async function handleMediaMessage(
-  buffer: Buffer,
-  filename: string,
-  ext: string,
-) {
-  await writeFileToPublicDir(buffer, ext, filename);
 }
 
 // external map to store retry counts of messages when decryption/encryption fails
@@ -166,7 +136,7 @@ export const startSock = async () => {
     console.log(`Pairing code: ${code}`);
   }
 
-  const sendMessageWTyping = async (msg: AnyMessageContent, jid: string) => {
+  sendMessageWTyping = async (msg: AnyMessageContent, jid: string) => {
     await sock.presenceSubscribe(jid);
     await delay(500);
 
