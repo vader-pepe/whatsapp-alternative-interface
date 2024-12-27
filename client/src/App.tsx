@@ -31,7 +31,7 @@ const App: Component = () => {
   async function getChats() {
     const d = await axios.get<{ chats: Chat[] }>(`http://localhost:3001/chats`);
     if (d.data) {
-      const transform = d.data.chats.filter(function (chat) {
+      const transform = d.data.chats.filter(function(chat) {
         if (
           chatType(chat) !== "unknown" &&
           chat.messages &&
@@ -70,6 +70,9 @@ const App: Component = () => {
     const raw = JSON.parse(data);
     if (raw.qr) {
       setQr(raw.qr);
+      if (raw.qr === "undefined") {
+        setQr(undefined);
+      }
     }
 
     if (raw.messages) {

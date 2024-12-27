@@ -212,6 +212,7 @@ export const startSock = async () => {
         if (update.connection === "open") {
           console.log("qr already scanned");
           wss.clients.forEach((client) => {
+            client.send(JSON.stringify({ qr: "undefined" }));
             client.send(JSON.stringify({ state: state.creds }, undefined, 2));
           });
         }

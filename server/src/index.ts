@@ -31,7 +31,7 @@ export interface Output {
   headers: Headers;
 }
 
-export interface Headers {}
+export interface Headers { }
 
 export interface Payload {
   statusCode: number;
@@ -106,13 +106,13 @@ const timestamp = new Date();
 app.use(cors({}));
 app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
-app.get("/", function (_req, res) {
+app.get("/", function(_req, res) {
   const timediff = new Date().getTime() - timestamp.getTime();
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.status(200).send(`Alive for: ${convertMsToTime(timediff)}`);
 });
 
-app.get("/chats", async function (_req, res) {
+app.get("/chats", async function(_req, res) {
   if (!store) {
     return res.status(404).send("No Data");
   }
@@ -141,7 +141,7 @@ app.get("/chats", async function (_req, res) {
   return res.status(200).json({ chats });
 });
 
-app.get("/messages/:id/:offset/:limit", async function (req, res) {
+app.get("/messages/:id/:offset/:limit", async function(req, res) {
   const chatId = req.params.id;
   const offset = Number(req.params.offset);
   const limit = Number(req.params.limit);
@@ -161,7 +161,7 @@ app.get("/messages/:id/:offset/:limit", async function (req, res) {
   return res.status(404).send("Chat Not Found");
 });
 
-app.get("/media/:chatId/:id", async function (req, res) {
+app.get("/media/:chatId/:id", async function(req, res) {
   const chatId = req.params.chatId;
   const id = req.params.id;
   if (!store) {
@@ -171,7 +171,7 @@ app.get("/media/:chatId/:id", async function (req, res) {
   const messages = store.messages[chatId];
   if (messages) {
     const clone = [...messages.array];
-    const filtered = clone.filter(function (m) {
+    const filtered = clone.filter(function(m) {
       const keyId = m.key.id;
       if (keyId === id) {
         return true;
@@ -262,7 +262,7 @@ app.get("/media/:chatId/:id", async function (req, res) {
   return res.status(404).send("No chat found");
 });
 
-app.get("/contacts", async function (_req, res) {
+app.get("/contacts", async function(_req, res) {
   const contacts = store?.contacts;
   if (contacts) {
     return res.status(200).json({ contacts });
@@ -272,14 +272,13 @@ app.get("/contacts", async function (_req, res) {
 
 // TODO: wait 30s for first message send to prevent
 //'Precondition Required' error
-app.post("/send/:id", async function (req, res) {
+app.post("/send/:id", async function(req, res) {
   const id = req.params.id;
   const text = req.body.text as string;
   if (s) {
     try {
       // TODO: handle sudden connection drop here
-      // await s.sendMessage(id, { text });
-      await sendMessageWTyping({ text }, id);
+      sendMessageWTyping({ text }, id);
       return res.status(200).send("OK");
     } catch (error) {
       console.log(JSON.stringify(error));
@@ -290,7 +289,7 @@ app.post("/send/:id", async function (req, res) {
   return res.status(404).send("No Data");
 });
 
-app.all("*", function (_req, res) {
+app.all("*", function(_req, res) {
   res.redirect("/");
 });
 
