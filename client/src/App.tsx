@@ -8,6 +8,7 @@ import { createSignal, type Component, For, createMemo } from "solid-js";
 import { setsNewMessageToChat, chatType, setChatsRow } from "./utils/chat";
 import { createVirtualizer } from "@tanstack/solid-virtual";
 import { ChatWindow } from "./components/chat-window";
+import { sleep } from "./utils/single-function";
 
 const App: Component = () => {
   const socket = new WebSocket("ws://localhost:8081");
@@ -43,6 +44,11 @@ const App: Component = () => {
         return false;
       });
       setChats(transform);
+    }
+
+    await sleep(3000);
+    if (chats().length === 0) {
+      await getChats();
     }
   }
 

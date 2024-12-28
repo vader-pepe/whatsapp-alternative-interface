@@ -1,5 +1,4 @@
-import { type Chat, type WAMessage, type proto } from "@whiskeysockets/baileys";
-import l from "lodash";
+import { type proto } from "@whiskeysockets/baileys";
 
 export type MessageType = keyof proto.IMessage;
 /**
