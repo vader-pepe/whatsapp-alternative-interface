@@ -5,7 +5,6 @@ import { env } from "@/common/utils/envConfig";
 import { app, logger, payload } from "@/server";
 import { Request, Response } from "express";
 
-
 export async function handleIncoming(req: Request, res: Response) {
   const parsedBody = payload.safeParse(req.body);
   if (!parsedBody.success) {
