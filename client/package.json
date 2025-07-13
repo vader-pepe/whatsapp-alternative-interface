@@ -16,8 +16,12 @@
     "vite-plugin-solid": "^2.11.6"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "axios": "^1.10.0",
     "baileys": "^6.7.18",
+    "daisyui": "^5.0.46",
     "socket.io-client": "^4.8.1",
-    "solid-js": "^1.9.5"
+    "solid-js": "^1.9.5",
+    "tailwindcss": "^4.1.11"
   }
 }
