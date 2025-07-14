@@ -17,6 +17,7 @@ interface Chat {
   updatedAt: Date;
   pushName: string | null;
   profilePicUrl: string;
+  lastConversation?: string;
 }
 
 const App: Component = () => {
@@ -50,8 +51,32 @@ const App: Component = () => {
 
   socket.on('new_message', (msg) => {
     const webMessage = msg as proto.WebMessageInfo;
+
+    setChats(prev => {
+      const index = prev.findIndex(v => v.remoteJid === webMessage.key.remoteJid);
+
+      if (index !== -1) {
+        // Update existing chat with full type preservation
+        const updatedChat: Chat = {
+          ...prev[index],
+          lastConversation: webMessage.message?.conversation ?? "TODO: Not yet implemented"
+        };
+
+        // Remove and reinsert at top
+        const newChats = [
+          ...prev.slice(0, index),
+          ...prev.slice(index + 1)
+        ];
+
+        return [updatedChat, ...newChats];
+      } else {
+
+        return [...prev];
+      }
+    });
+
     console.log('Received message:', webMessage);
-  })
+  });
 
   return (
     <div class="h-full flex flex-col items-center">
@@ -73,10 +98,12 @@ const App: Component = () => {
 
       <div class="relative mb-32 max-h-screen mx-4 flex flex-col">
         <For each={chats()}>
-          {(chat) => <button class="mb-2 cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden">{JSON.stringify(chat.pushName ?? chat.remoteJid)}</button>}
+          {(chat) => <button class="mb-2 cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden">
+            <h1 class="">{(chat.pushName ?? chat.remoteJid)}</h1>
+            <small class="my-2">{chat.lastConversation}</small>
+          </button>}
         </For>
       </div>
-
     </div>
   );
 };

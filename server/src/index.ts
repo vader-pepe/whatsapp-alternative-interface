@@ -27,22 +27,32 @@ export const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
-const clients = new Map<string, Socket>()
+const clientMap = new Map<string, Socket>();
 
-// Track connections
-io.on('connection', (socket) => {
-  logger.info(`[SOCKET.IO] Connected: ${socket.id}`)
-  clients.set(socket.id, socket)
+io.on('connection', (socket: Socket) => {
+  const ip = socket.handshake.address;
+  const ua = socket.handshake.headers['user-agent'] || '';
+  const key = `${ip}::${ua}`;
 
-  socket.on('disconnect', (reason) => {
-    logger.info(`[SOCKET.IO] Disconnected: ${socket.id} | Reason: ${reason}`)
-    clients.delete(socket.id)
-  })
+  if (clientMap.has(key)) {
+    const existing = clientMap.get(key);
+    if (existing && existing.id !== socket.id) {
+      console.log(`Disconnecting previous socket for: ${key}`);
+      existing.disconnect(true);
+    }
+  }
 
-  socket.on('error', (err) => {
-    logger.error(`[SOCKET.IO] Error on ${socket.id}:`, err)
-  })
-})
+  clientMap.set(key, socket);
+
+  console.log(`Client connected: ${socket.id} (${key})`);
+
+  socket.on('disconnect', () => {
+    console.log(`Client disconnected: ${socket.id}`);
+    if (clientMap.get(key)?.id === socket.id) {
+      clientMap.delete(key);
+    }
+  });
+});
 
 
 const onCloseSignal = () => {
