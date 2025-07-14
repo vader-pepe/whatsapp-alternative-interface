@@ -54,8 +54,8 @@ const App: Component = () => {
   })
 
   return (
-    <div class="h-full">
-      <label class="fixed my-3 mx-4 inset-0 input input-bordered flex items-center gap-2 z-10">
+    <div class="h-full flex flex-col items-center">
+      <label class=" my-3 mx-4 inset-0 input input-bordered flex items-center gap-2 z-10">
         <input type="text" class="grow" placeholder="Search Contact..." />
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -71,7 +71,7 @@ const App: Component = () => {
         </svg>
       </label>
 
-      <div class="relative mt-16 mb-32 max-h-screen mx-4 flex flex-col">
+      <div class="relative mb-32 max-h-screen mx-4 flex flex-col">
         <For each={chats()}>
           {(chat) => <button class="mb-2 cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden">{JSON.stringify(chat.pushName ?? chat.remoteJid)}</button>}
         </For>
