@@ -89,6 +89,8 @@ export function GetMessage({
     .with({ viewOnceMessageV2: P.any }, () =>
       GetMessage({ messageInfo: message.viewOnceMessageV2! }),
     )
+    .with({ viewOnceMessageV2Extension: P.any }, () => GetMessage({ messageInfo: message.viewOnceMessageV2Extension! }))
+    .with({ viewOnceMessage: P.any }, () => GetMessage({ messageInfo: message.viewOnceMessage! }))
     .with({ editedMessage: P.any }, () =>
       GetMessage({ messageInfo: message.editedMessage! }),
     )

@@ -21,14 +21,17 @@ export interface Chat {
   lastConversation?: string
 }
 
-function GeneratePreviewMessage(msg: proto.IMessage) {
+function GeneratePreviewMessage(msg: proto.IMessage, stub?: string[]) {
+  if (stub) {
+    return "Secret Message";
+  }
+
   const res = match(msg)
     .with({ conversation: P.any }, () => msg.conversation ?? "")
     .with({ imageMessage: P.any }, () => "Photo")
     .with({ videoMessage: P.any }, () => "Video")
     .with({ stickerMessage: P.any }, () => "Sticker")
     .with({ reactionMessage: P.any }, () => "Reaction")
-    .with({ viewOnceMessage: P.any }, () => "View Once")
     .with({ editedMessage: P.any }, () => "Edited")
     .with({ extendedTextMessage: P.any }, () => {
       const text = msg.extendedTextMessage!.text;
@@ -85,7 +88,7 @@ const App: Component = () => {
         if (index !== -1) {
           const updatedChat: Chat = {
             ...prev[index],
-            lastConversation: `${message.key.fromMe ? 'Me' : message.pushName ?? message.key.remoteJid!}: ${GeneratePreviewMessage(message.message!)}`
+            lastConversation: `${message.key.fromMe ? 'Me' : message.pushName ?? message.key.remoteJid!}: ${GeneratePreviewMessage(message.message!, message.messageStubParameters!)}`
           };
 
           const newChats = [

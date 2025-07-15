@@ -26,7 +26,6 @@ export function ChatWindow({
 
   socket.on("messages.upsert", function(msg) {
     const webMessage = msg as BaileysEventMap['messages.upsert'];
-    // webMessage.messages
     setMessages(prev => [...prev, ...webMessage.messages.filter(msg => msg.key.remoteJid === currentChat.jid)])
   });
 
@@ -73,12 +72,6 @@ export function ChatWindow({
       <div
         ref={(el) => (container = el)}
         class="mt-2 max-w-full h-full py-3 px-2 border border-gray-700 rounded-md overflow-y-scroll overflow-x-hidden"
-        ondragover={(e) => e.preventDefault()}
-        ondrop={(e) => {
-          e.preventDefault();
-          const file = e.dataTransfer?.files?.[0];
-          // if (file) handleFileUpload(file);
-        }}
       >
         <div class="w-full flex justify-center items-center">
           <button
@@ -96,7 +89,7 @@ export function ChatWindow({
       </div>
 
       <form
-        class="w-full mt-2"
+        class="w-full mt-2 relative"
         onsubmit={async (e) => {
           e.preventDefault();
           // await sendMessage(currentChat.id);
@@ -109,26 +102,8 @@ export function ChatWindow({
           placeholder="Type a message"
           class="textarea textarea-bordered w-full"
         />
+        <button type="submit" class="btn btn-accent absolute bottom-5 right-2">Send</button>
       </form>
-
-      <div class="flex items-center gap-4 mt-2">
-        <input
-          type="file"
-          accept="image/*,video/*,audio/*,application/pdf"
-          onchange={(e) => {
-            const file = e.currentTarget.files?.[0];
-            // if (file) handleFileUpload(file);
-          }}
-        />
-        <label class="flex items-center gap-2">
-          <input
-            type="checkbox"
-          // checked={sendAsSticker()}
-          // onchange={(e) => setSendAsSticker(e.currentTarget.checked)}
-          />
-          <span class="text-white">Send as sticker</span>
-        </label>
-      </div>
     </div>
   );
 };
