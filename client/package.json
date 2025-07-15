@@ -11,6 +11,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@types/mime-types": "^3.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.0",
     "vite-plugin-solid": "^2.11.6"
@@ -20,8 +21,10 @@
     "axios": "^1.10.0",
     "baileys": "^6.7.18",
     "daisyui": "^5.0.46",
+    "mime-types": "^3.0.1",
     "socket.io-client": "^4.8.1",
     "solid-js": "^1.9.5",
-    "tailwindcss": "^4.1.11"
+    "tailwindcss": "^4.1.11",
+    "ts-pattern": "^5.7.1"
   }
 }
