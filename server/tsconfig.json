@@ -1,20 +1,20 @@
 {
-  "extends": "@tsconfig/node20/tsconfig.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "outDir": "dist",
-    "baseUrl": ".",
-    "allowUnusedLabels": false,
-    "allowUnreachableCode": false,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": false,
-    "sourceMap": true,
-    "resolveJsonModule": true
-  },
-  "include": ["src", "test"],
-  "exclude": ["dist", "node_modules"]
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"baseUrl": "./src",
+		"paths": {
+			"@/*": ["*"]
+		},
+		"moduleResolution": "Node",
+		"outDir": "dist",
+		"importsNotUsedAsValues": "remove",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"types": ["vitest/globals"]
+	},
+	"include": ["src/**/*"],
+	"exclude": ["node_modules"]
 }
