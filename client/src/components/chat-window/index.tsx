@@ -1,45 +1,43 @@
-import { type WAMessage, type Chat, type proto } from "@whiskeysockets/baileys";
-import axios from "axios";
 import { createSignal, For, onMount } from "solid-js";
+import { type Socket } from 'socket.io-client';
+import { type BaileysEventMap, type proto } from "baileys";
+import axios from "axios";
+import { Chat } from "../../App";
 import { ChatBubbles } from "../chat-bubbles";
-import l from "lodash";
+
+const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
 
 export function ChatWindow({
   currentChat,
   closeChatWindow,
-  socket,
+  socket
 }: {
   currentChat: Chat | undefined;
   closeChatWindow: () => void;
-  socket: WebSocket;
+  socket: Socket
 }) {
-  if (!currentChat) {
-    return null;
-  }
+  if (!currentChat) return null;
 
-  const [messages, setMessages] = createSignal<WAMessage[]>([]);
-  let container: HTMLElement | null = null;
-  let inputElement: HTMLElement | null = null;
+  const [messages, setMessages] = createSignal<proto.IWebMessageInfo[]>([]);
   const [message, setMessage] = createSignal("");
   const [offset, setOffset] = createSignal(0);
+  let container: HTMLElement | null = null;
+  let inputElement: HTMLElement | null = null;
 
-  socket.addEventListener("message", async (event) => {
-    const data = event.data as string;
-    const raw = JSON.parse(data);
-
-    if (raw.messages) {
-      const incomingMessages = JSON.parse(
-        raw.messages,
-      ) as proto.IWebMessageInfo[];
-      const current = l.cloneDeep(messages());
-      incomingMessages.forEach((incmg) => {
-        if (incmg.key.remoteJid === currentChat.id) {
-          current.push(incmg);
-        }
-      });
-      setMessages(current);
-    }
+  socket.on("messages.upsert", function(msg) {
+    const webMessage = msg as BaileysEventMap['messages.upsert'];
+    setMessages(prev => [...prev, ...webMessage.messages.filter(msg => msg.key.remoteJid === currentChat.jid)])
   });
+
+  async function fetchData(newOffset = 0) {
+    const m = await axios.get<proto.IWebMessageInfo[]>(
+      `${API_URL}/messages/${currentChat!.jid}/50/${newOffset}`,
+    );
+    if (m.data) {
+      setOffset(newOffset);
+      setMessages((prev) => [...m.data, ...prev]);
+    }
+  }
 
   onMount(async () => {
     if (inputElement) {
@@ -47,29 +45,12 @@ export function ChatWindow({
     }
     await fetchData();
     // prevent race condition
-    setTimeout(function () {
+    setTimeout(function() {
       if (container) {
         container.scrollTop = container.scrollHeight;
       }
     }, 0);
   });
-
-  async function fetchData(newOffset = 0) {
-    const m = await axios.get<{ messages: WAMessage[] }>(
-      `http://localhost:3001/messages/${currentChat!.id}/${newOffset}/5`,
-    );
-    if (m.data) {
-      setOffset((prev) => prev + newOffset);
-      setMessages((prev) => [...m.data.messages, ...prev]);
-    }
-  }
-
-  async function sendMessage(id: string) {
-    await axios.post(`http://localhost:3001/send/${id}`, {
-      text: message(),
-    });
-    setMessage("");
-  }
 
   return (
     <div class="flex flex-col h-screen fixed inset-0 backdrop-blur-md z-10 px-3 py-4">
@@ -84,9 +65,10 @@ export function ChatWindow({
           </svg>
         </button>
         <h1 class="font-semibold text-xl">
-          {currentChat.name || currentChat.id}
+          {currentChat.name || currentChat.jid}
         </h1>
       </div>
+
       <div
         ref={(el) => (container = el)}
         class="mt-2 max-w-full h-full py-3 px-2 border border-gray-700 rounded-md overflow-y-scroll overflow-x-hidden"
@@ -101,22 +83,16 @@ export function ChatWindow({
             Load Previous
           </button>
         </div>
-        <For
-          each={messages()}
-          fallback={
-            <span class="loading loading-spinner loading-md block"></span>
-          }
-        >
-          {(message) => {
-            return <ChatBubbles messageInfo={message} />;
-          }}
+        <For each={messages()} fallback={<span class="loading loading-spinner loading-md block"></span>}>
+          {(message) => <ChatBubbles messageInfo={message} />}
         </For>
       </div>
+
       <form
-        class="w-full"
+        class="w-full mt-2 relative"
         onsubmit={async (e) => {
           e.preventDefault();
-          await sendMessage(currentChat.id);
+          // await sendMessage(currentChat.id);
         }}
       >
         <input
@@ -124,9 +100,11 @@ export function ChatWindow({
           oninput={(e) => setMessage(e.target.value)}
           value={message()}
           placeholder="Type a message"
-          class="mt-2 textarea textarea-bordered w-full"
+          class="textarea textarea-bordered w-full"
         />
+        <button type="submit" class="btn btn-accent absolute bottom-5 right-2">Send</button>
       </form>
     </div>
   );
-}
+};
+
