@@ -1,5 +1,8 @@
-import { proto } from "@whiskeysockets/baileys";
+import { proto } from "baileys";
+import { JSX } from "solid-js/jsx-runtime";
 import { match, P } from "ts-pattern";
+
+const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
 
 /**
  * Function to get the contents of the said message
@@ -8,13 +11,13 @@ export function GetMessage({
   messageInfo,
 }: {
   messageInfo:
-    | proto.IWebMessageInfo
-    | proto.IContextInfo
-    | proto.Message.IFutureProofMessage
-    | proto.Message.IProtocolMessage;
-}) {
+  | proto.IWebMessageInfo
+  | proto.IContextInfo
+  | proto.Message.IFutureProofMessage
+  | proto.Message.IProtocolMessage;
+}): JSX.Element {
   let message: proto.IMessage | undefined | null = null;
-  let mediaUrl = `http://localhost:3001/media/`;
+  let mediaUrl = API_URL + `/media/`;
   if ("message" in messageInfo) {
     message = messageInfo.message;
   } else if ("quotedMessage" in messageInfo) {
@@ -43,28 +46,29 @@ export function GetMessage({
       if (caption)
         return (
           <>
-            <img src={mediaUrl} alt="link broken or missing from server" />{" "}
+            <img crossorigin="anonymous" src={mediaUrl} alt="link broken or missing from server" />{" "}
             <small>{caption}</small>
           </>
         );
-      return <img src={mediaUrl} alt="link broken or missing from server" />;
+      return <img crossorigin="anonymous" src={mediaUrl} alt="link broken or missing from server" />;
     })
     .with({ videoMessage: P.any }, () => {
       const caption = message.videoMessage!.caption;
       if (caption) {
         return (
           <>
-            <video src={mediaUrl} /> <small>{caption}</small>
+            <video crossorigin="anonymous" src={mediaUrl} /> <small>{caption}</small>
           </>
         );
       }
-      return <video src={mediaUrl} />;
+      return <video crossorigin="anonymous" src={mediaUrl} />;
     })
     .with({ stickerMessage: P.any }, () => {
       return (
         <small>
           sticker:{" "}
           <img
+            crossorigin="anonymous"
             src={mediaUrl}
             alt="link broken or missing from server"
             class="w-16"
@@ -85,6 +89,8 @@ export function GetMessage({
     .with({ viewOnceMessageV2: P.any }, () =>
       GetMessage({ messageInfo: message.viewOnceMessageV2! }),
     )
+    .with({ viewOnceMessageV2Extension: P.any }, () => GetMessage({ messageInfo: message.viewOnceMessageV2Extension! }))
+    .with({ viewOnceMessage: P.any }, () => GetMessage({ messageInfo: message.viewOnceMessage! }))
     .with({ editedMessage: P.any }, () =>
       GetMessage({ messageInfo: message.editedMessage! }),
     )
@@ -98,6 +104,9 @@ export function GetMessage({
     .with({ viewOnceMessageV2Extension: P.any }, () =>
       GetMessage({ messageInfo: message.viewOnceMessageV2Extension! }),
     )
+    // TODO: handle documents
+    .with({ documentMessage: P.any }, () => "Secret Document")
+    .with({ documentWithCaptionMessage: P.any }, () => "Secret Document")
     .otherwise(() => JSON.stringify(message));
 
   // if (message.conversation) {
@@ -185,3 +194,4 @@ export function GetMessage({
 
   return res;
 }
+

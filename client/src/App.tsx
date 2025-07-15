@@ -1,177 +1,149 @@
-import {
-  type proto,
-  type Chat,
-  type AuthenticationState,
-} from "@whiskeysockets/baileys";
-import axios from "axios";
-import { createSignal, type Component, For, createMemo } from "solid-js";
-import { setsNewMessageToChat, chatType, setChatsRow } from "./utils/chat";
-import { createVirtualizer } from "@tanstack/solid-virtual";
-import { ChatWindow } from "./components/chat-window";
-import { sleep } from "./utils/single-function";
+import { createSignal, For, type Component } from 'solid-js';
+import { type BaileysEventMap, type proto } from "baileys";
+import { io } from 'socket.io-client';
+import axios from 'axios';
+import { match, P } from "ts-pattern";
+import { ChatWindow } from './components/chat-window';
+
+const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
+const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL;
+const INSTANCE_NAME = import.meta.env.VITE_INSTANCE_NAME;
+const API_KEY = import.meta.env.VITE_API_KEY;
+
+export interface Chat {
+  count: number
+  latest: number | null
+  jid: string
+  name: string | null
+  notify: string | null
+  imgUrl: string | null
+  status: string | null
+  lastConversation?: string
+}
+
+function GeneratePreviewMessage(msg: proto.IMessage, stub?: string[]) {
+  if (stub) {
+    return "Secret Message";
+  }
+
+  const res = match(msg)
+    .with({ conversation: P.any }, () => msg.conversation ?? "")
+    .with({ imageMessage: P.any }, () => "Photo")
+    .with({ videoMessage: P.any }, () => "Video")
+    .with({ stickerMessage: P.any }, () => "Sticker")
+    .with({ reactionMessage: P.any }, () => "Reaction")
+    .with({ editedMessage: P.any }, () => "Edited")
+    .with({ extendedTextMessage: P.any }, () => {
+      const text = msg.extendedTextMessage!.text;
+      if (text) {
+        return text;
+      }
+      return JSON.stringify(msg.extendedTextMessage);
+    })
+    .otherwise(() => JSON.stringify(msg))
+  return res;
+};
 
 const App: Component = () => {
-  const socket = new WebSocket("ws://localhost:8081");
-  let container: HTMLElement | null = null;
-  const [qr, setQr] = createSignal<string | undefined>(undefined);
   const [isConnectionEstablished, setIsConnectionEstablished] =
     createSignal(false);
-  const [chats, setChats] = createSignal<Chat[]>([]);
   const [currentChat, setCurrentChat] = createSignal<Chat>();
   const [showChatWindow, setShowChatWindow] = createSignal(false);
+  const [chats, setChats] = createSignal<Chat[]>([]);
 
-  const rowVirtualizer = createMemo(() =>
-    createVirtualizer({
-      count: chats().length,
-      getScrollElement: () => container,
-      estimateSize: () => 85, // estimated height of each item in px
-      overscan: 5, // number of extra items to render in the viewport
-    }),
-  );
-
-  async function getChats() {
-    const d = await axios.get<{ chats: Chat[] }>(`http://localhost:3001/chats`);
-    if (d.data) {
-      const transform = d.data.chats.filter(function(chat) {
-        if (
-          chatType(chat) !== "unknown" &&
-          chat.messages &&
-          chat.messages.length > 0 &&
-          setChatsRow(chat)
-        ) {
-          return true;
-        }
-        return false;
-      });
-      setChats(transform);
-    }
-
-    await sleep(3000);
-    if (chats().length === 0) {
-      await getChats();
-    }
-  }
-
-  async function openChatWindow(chatId: Chat) {
-    setCurrentChat(chatId);
-    setShowChatWindow(true);
-  }
+  const socket = io(WEBHOOK_URL);
 
   function closeChatWindow() {
     setCurrentChat();
     setShowChatWindow(false);
   }
 
-  // Connection opened
-  socket.addEventListener("open", (_event) => {
+  async function openChatWindow(chat: Chat) {
+    setCurrentChat(chat);
+    setShowChatWindow(true);
+  }
+
+  socket.on('connect', async () => {
+    console.log('Connected via Socket.IO');
     setIsConnectionEstablished(true);
+
+    const raw = await axios.get<Chat[]>(API_URL + `/chats`);
+
+    if (raw.data) {
+      setChats(raw.data);
+    }
+
   });
 
-  socket.addEventListener("close", (_event) => {
+  socket.on('disconnect', () => {
+    console.log('Disconnected');
     setIsConnectionEstablished(false);
   });
 
-  socket.addEventListener("message", async (event) => {
-    const data = event.data as string;
-    const raw = JSON.parse(data);
-    if (raw.qr) {
-      setQr(raw.qr);
-      if (raw.qr === "undefined") {
-        setQr(undefined);
-      }
-    }
+  socket.on('messages.upsert', (msg) => {
+    const webMessage = msg as BaileysEventMap['messages.upsert'];
+    for (const message of webMessage.messages) {
+      setChats(prev => {
+        const index = prev.findIndex(v => v.jid === message.key.remoteJid);
+        if (index !== -1) {
+          const updatedChat: Chat = {
+            ...prev[index],
+            lastConversation: `${message.key.fromMe ? 'Me' : message.pushName ?? message.key.remoteJid!}: ${GeneratePreviewMessage(message.message!, message.messageStubParameters!)}`
+          };
 
-    if (raw.messages) {
-      const messages = JSON.parse(raw.messages) as proto.IWebMessageInfo[];
-      const incoming = setsNewMessageToChat(messages, chats());
-      setChats(incoming);
-    }
+          const newChats = [
+            ...prev.slice(0, index),
+            ...prev.slice(index + 1),
+          ];
 
-    if (raw.state) {
-      const state = raw.state as AuthenticationState["creds"];
-      if (state.account) {
-        await getChats();
-      }
+          return [updatedChat, ...newChats];
+        } else {
+          return prev;
+        }
+      });
     }
+    console.log('Received message:', webMessage);
   });
 
   return (
-    <div
-      class={`relative py-3 px-4 ${!isConnectionEstablished() ? "flex justify-center items-center" : ""} `}
-    >
-      {qr() ? (
-        <div class="h-screen flex justify-center items-center absolute inset-0 backdrop-blur-md z-10">
-          <div class="bg-white" innerHTML={qr()}></div>
-        </div>
+    <div class="h-full flex flex-col items-center">
+      <div class="fixed w-full h-[65px] z-10 flex justify-center">
+        <label class=" my-3 mx-4 inset-0 input input-bordered flex gap-2 max-w-[600px] min-w-[300px]">
+          <input type="text" class="grow" placeholder="Search Contact..." />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            class="h-4 w-4 opacity-70"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        </label>
+      </div>
+
+      <div class="relative mb-32 max-h-screen mx-4 flex flex-col mt-16">
+        <For each={chats()}>
+          {(chat) => <button onclick={() =>
+            openChatWindow(chat)
+          } class="max-w-[600px] min-w-[300px] mb-2 cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden">
+            <h1 class="">{(chat.name ?? chat.jid)}</h1>
+            <small class="my-2 text-ellipsis">{chat.lastConversation}</small>
+          </button>}
+        </For>
+      </div>
+
+      {showChatWindow() ? (
+        <ChatWindow
+          currentChat={currentChat()}
+          closeChatWindow={closeChatWindow}
+          socket={socket}
+        />
       ) : null}
 
-      {isConnectionEstablished() ? (
-        <>
-          <label class="fixed my-3 mx-4 inset-0 input input-bordered flex items-center gap-2 z-10">
-            <input type="text" class="grow" placeholder="Search Contact..." />
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              class="h-4 w-4 opacity-70"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
-                clip-rule="evenodd"
-              />
-            </svg>
-          </label>
-
-          <div
-            ref={(e) => (container = e)}
-            class={`overflow-y-scroll overflow-x-hidden relative mt-16 mb-32 max-h-screen`}
-          >
-            <div
-              style={{
-                height: `${rowVirtualizer().getTotalSize().toString()}px`,
-              }}
-            >
-              <For each={rowVirtualizer().getVirtualItems()}>
-                {(virtualRow) => {
-                  return (
-                    <div
-                      class={`absolute w-full`}
-                      style={{ top: `${virtualRow.start}px` }}
-                    >
-                      <div
-                        onclick={() =>
-                          openChatWindow(chats()[virtualRow.index])
-                        }
-                        role="button"
-                        class="cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden"
-                      >
-                        <h1>
-                          {chats()[virtualRow.index].name ||
-                            chats()[virtualRow.index].id}
-                        </h1>
-                        <small class="">
-                          {setChatsRow(chats()[virtualRow.index])}
-                        </small>
-                      </div>
-                    </div>
-                  );
-                }}
-              </For>
-            </div>
-          </div>
-
-          {showChatWindow() ? (
-            <ChatWindow
-              currentChat={currentChat()}
-              closeChatWindow={closeChatWindow}
-              socket={socket}
-            />
-          ) : null}
-        </>
-      ) : (
-        <h1 class="text-5xl">{`:(`}</h1>
-      )}
     </div>
   );
 };

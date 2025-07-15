@@ -1,13 +1,13 @@
-import { type proto } from "@whiskeysockets/baileys";
-import { checkMessageType } from "../../utils/message";
-import { ChatBubble } from "./chat-bubble";
-import l from "lodash";
-import { GetMessage } from "../message";
+import { type proto } from "baileys";
 import { JSX } from "solid-js/jsx-runtime";
+
+import { ChatBubble } from "./chat-bubble";
+import { checkMessageType } from "../../utils";
+import { GetMessage } from "../message";
 
 export function ChatBubbles({
   messageInfo,
-  id,
+  id
 }: {
   messageInfo: proto.IWebMessageInfo;
   id?: string;
@@ -24,23 +24,49 @@ export function ChatBubbles({
 
   if (message && msgType !== null) {
     participant = message.chat?.displayName;
-    if (l.includes(msgType, "extendedTextMessage")) {
+
+    if ("extendedTextMessage" in message) {
       const context = message.extendedTextMessage!.contextInfo;
       if (context) {
         setContextAndParticipant(context);
       }
-    } else if (l.includes(msgType, "stickerMessage")) {
+    } else if ("stickerMessage" in message) {
       const context = message.stickerMessage!.contextInfo;
       if (context) {
         setContextAndParticipant(context);
       }
-    } else if (l.includes(msgType, "videoMessage")) {
+    } else if ("videoMessage" in message) {
       const context = message.videoMessage!.contextInfo;
       if (context) {
         setContextAndParticipant(context);
       }
-    } else if (l.includes(msgType, "imageMessage")) {
+    } else if ("imageMessage" in message) {
       const context = message.imageMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if ("audioMessage" in message) {
+      const context = message.audioMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if ("locationMessage" in message) {
+      const context = message.locationMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if ("liveLocationMessage" in message) {
+      const context = message.locationMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if ("ptvMessage" in message) {
+      const context = message.ptvMessage!.contextInfo;
+      if (context) {
+        setContextAndParticipant(context);
+      }
+    } else if ("eventMessage" in message) {
+      const context = message.eventMessage!.contextInfo;
       if (context) {
         setContextAndParticipant(context);
       }
@@ -81,4 +107,5 @@ export function ChatBubbles({
   }
 
   return null;
-}
+
+};
