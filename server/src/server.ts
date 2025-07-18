@@ -3,13 +3,12 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
 import { Transform } from "stream";
-import { proto, getContentType, downloadMediaMessage, downloadContentFromMessage, extractMessageContent } from "baileys";
+import { getContentType, downloadMediaMessage, downloadContentFromMessage } from "baileys";
 
 import { healthCheckRouter } from "@/api/healthCheck/healthCheckRouter";
 import { userRouter } from "@/api/user/userRouter";
 import { openAPIRouter } from "@/api-docs/openAPIRouter";
 import errorHandler from "@/common/middleware/errorHandler";
-import rateLimiter from "@/common/middleware/rateLimiter";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { store, sock, getMimeType, sendMessageWTyping } from ".";
@@ -38,13 +37,12 @@ const logger = pino({
   level: "info",
   transport: {
     targets: [
-      // { name: "server start", timestamp: () => `,"time":"${new Date().toJSON()}"` }, pino.destination('./logs.txt'),
       { target: "pino-pretty", options: { colorize: true }, level: "info" },
       { target: "pino/file", options: { destination: "./logs.txt" }, level: "info" }
     ]
   }
 });
-// const logger = P({ timestamp: () => `,"time":"${new Date().toJSON()}"` }, P.destination('./wa-logs.txt'))
+
 const app: Express = express();
 
 // Set the application to trust the reverse proxy
@@ -55,7 +53,6 @@ app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(helmet());
-app.use(rateLimiter);
 
 // Request logging
 app.use(requestLogger);
@@ -146,12 +143,32 @@ app.get("/media/:jid/:id", async function(req, res) {
   return res.send(type);
 });
 
-app.post("/send/:jid", async function(req, res) {
-  const jid = req.params.jid;
-  const text = req.body.text as string;
-  await sendMessageWTyping({ text }, jid);
+app.post('/send', async (req, res) => {
+  const { jid, content, quoted, timestamp } = req.body;
 
-  res.send("Sent!");
+  if (!jid || !content) {
+    return res.status(400).json({ error: 'jid and content are required' });
+  }
+
+  if (!sock) {
+    return res.status(404);
+  }
+
+  try {
+    await sock.sendMessage(
+      jid,
+      content,
+      {
+        quoted,
+        timestamp: timestamp ? new Date(timestamp) : new Date(),
+      }
+    );
+
+    res.status(200).json({ message: "Sent!" });
+  } catch (err) {
+    logger.error({ err }, 'Failed to send message:');
+    res.status(500).json({ error: 'Failed to send message' });
+  }
 });
 
 // Swagger UI

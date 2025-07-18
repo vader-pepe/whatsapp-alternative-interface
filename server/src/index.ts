@@ -23,8 +23,6 @@ import makeWASocket, {
   AuthenticationState,
   AuthenticationCreds,
   initAuthCreds,
-  extractMessageContent,
-  getContentType
 } from 'baileys';
 import fs from 'fs'
 import Database from "better-sqlite3";
@@ -80,7 +78,7 @@ export let sendMessageWTyping: (msg: AnyMessageContent, jid: string) => Promise<
 
 // external map to store retry counts of messages when decryption/encryption fails
 // keep this out of the socket itself, so as to prevent a message decryption/encryption loop across socket restarts
-const msgRetryCounterCache = new NodeCache()
+const msgRetryCounterCache = new NodeCache<any>();
 
 // const onDemandMap = new Map<string, string>()
 
@@ -267,9 +265,7 @@ function makeSqliteMessageStore() {
         } finally {
           isHistorySyncRunning = false;
         }
-
       });
-
     }
   }
 }

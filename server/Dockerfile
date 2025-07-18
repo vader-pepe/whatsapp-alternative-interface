@@ -5,31 +5,29 @@ ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 WORKDIR /app
 
-# Production dependencies stage
-FROM base AS prod-deps
+# Install native build dependencies
+FROM base AS native-deps
+RUN apt-get update && \
+    apt-get install -y build-essential python3 && \
+    rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml ./
-# Install only production dependencies
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts && \
+    pnpm rebuild better-sqlite3
 
-# Build stage - install all dependencies and build
+# Build stage
 FROM base AS build
 COPY package.json pnpm-lock.yaml ./
-# Install all dependencies (including dev dependencies)
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm run build
 
-# Final stage - combine production dependencies and build output
-FROM node:23.11.1-alpine AS runner
+# Final stage
+FROM node:23.11.1-slim AS runner
 WORKDIR /app
-COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=native-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
-
-# Use the node user from the image
 USER node
-
-# Expose port 8080
-EXPOSE 8080
-
-# Start the server
+EXPOSE 8001
 CMD ["node", "dist/index.js"]
