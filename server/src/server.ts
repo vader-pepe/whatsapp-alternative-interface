@@ -90,8 +90,9 @@ app.get("/media/:jid/:id", async function(req, res) {
     return res.status(404);
   }
 
-  const b64 = (await getBase64FromMediaMessage({ message: m })) ?? { base64: "" };
-  return res.send(b64.base64);
+  const data = (await getBase64FromMediaMessage({ message: m }, true)) ?? { base64: "", buffer: null, mimetype: "" };
+  res.set("Content-Type", data.mimetype);
+  return res.status(200).send(data.buffer);
 });
 
 app.post('/send', async (req, res) => {
