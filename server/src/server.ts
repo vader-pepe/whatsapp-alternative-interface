@@ -3,7 +3,9 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
 import { Transform } from "stream";
-import { getContentType, downloadMediaMessage, downloadContentFromMessage } from "baileys";
+import mimeTypes from "mime-types";
+import { v4 } from "uuid";
+import { type proto, getContentType, downloadMediaMessage, downloadContentFromMessage } from "baileys";
 
 import { healthCheckRouter } from "@/api/healthCheck/healthCheckRouter";
 import { userRouter } from "@/api/user/userRouter";
@@ -11,7 +13,7 @@ import { openAPIRouter } from "@/api-docs/openAPIRouter";
 import errorHandler from "@/common/middleware/errorHandler";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
-import { store, sock, getMimeType, sendMessageWTyping } from ".";
+import { store, sock, getMimeType } from ".";
 
 export async function transformToBuffer(
   transformStream: Transform,
@@ -88,59 +90,9 @@ app.get("/media/:jid/:id", async function(req, res) {
   if (!sock) {
     return res.status(404);
   }
-  const type = getContentType(m.message!)!;
-  const mimeType = getMimeType(type);
-  if (type === "stickerMessage") {
-    if (m.message!["stickerMessage"]!.mediaKey) {
-      const stream = await downloadContentFromMessage(
-        {
-          url: `https://mmg.whatsapp.net${m.message!["stickerMessage"]!.directPath}`,
-          mediaKey: m.message!["stickerMessage"]!.mediaKey,
-          directPath: m.message!["stickerMessage"]!.directPath,
-        },
-        "sticker",
-        {},
-      );
-      const buffer = await transformToBuffer(stream);
-      res.set("Content-Type", mimeType);
-      return res.status(200).send(buffer);
-    }
 
-    return res.status(404);
-  }
-
-  if (type === "imageMessage") {
-    const buffer = await downloadMediaMessage(
-      m,
-      "buffer",
-      {},
-      { logger: logger, reuploadRequest: sock.updateMediaMessage },
-    );
-
-    res.set("Content-Type", mimeType);
-    return res.status(200).send(buffer);
-  }
-
-  if (type === "videoMessage") {
-    if (m.message!["videoMessage"]!.mediaKey) {
-      const stream = await downloadContentFromMessage(
-        {
-          url: m.message!["videoMessage"]!.url,
-          mediaKey: m.message!["videoMessage"]!.mediaKey,
-          directPath: m.message!["videoMessage"]!.directPath,
-        },
-        "video",
-        {},
-      );
-      const buffer = await transformToBuffer(stream);
-      res.set("Content-Type", mimeType);
-      return res.status(200).send(buffer);
-    }
-
-    return res.status(404);
-  }
-
-  return res.send(type);
+  const b64 = (await getBase64FromMediaMessage({ message: m })) ?? { base64: "" };
+  return res.send(b64.base64);
 });
 
 app.post('/send', async (req, res) => {
@@ -170,6 +122,224 @@ app.post('/send', async (req, res) => {
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
+
+// TODO: handle audio
+// async function processAudioMp4(audio: string) {
+//   let inputStream: PassThrough;
+//
+//   if (isURL(audio)) {
+//     const response = await axios.get(audio, { responseType: 'stream' });
+//     inputStream = response.data;
+//   } else {
+//     const audioBuffer = Buffer.from(audio, 'base64');
+//     inputStream = new PassThrough();
+//     inputStream.end(audioBuffer);
+//   }
+//
+//   return new Promise<Buffer>((resolve, reject) => {
+//     const ffmpegProcess = spawn(ffmpegPath.path, [
+//       '-i',
+//       'pipe:0',
+//       '-vn',
+//       '-ab',
+//       '128k',
+//       '-ar',
+//       '44100',
+//       '-f',
+//       'mp4',
+//       '-movflags',
+//       'frag_keyframe+empty_moov',
+//       'pipe:1',
+//     ]);
+//
+//     const outputChunks: Buffer[] = [];
+//     let stderrData = '';
+//
+//     ffmpegProcess.stdout.on('data', (chunk) => {
+//       outputChunks.push(chunk);
+//     });
+//
+//     ffmpegProcess.stderr.on('data', (data) => {
+//       stderrData += data.toString();
+//       this.logger.verbose(`ffmpeg stderr: ${data}`);
+//     });
+//
+//     ffmpegProcess.on('error', (error) => {
+//       console.error('Error in ffmpeg process', error);
+//       reject(error);
+//     });
+//
+//     ffmpegProcess.on('close', (code) => {
+//       if (code === 0) {
+//         this.logger.verbose('Audio converted to mp4');
+//         const outputBuffer = Buffer.concat(outputChunks);
+//         resolve(outputBuffer);
+//       } else {
+//         this.logger.error(`ffmpeg exited with code ${code}`);
+//         this.logger.error(`ffmpeg stderr: ${stderrData}`);
+//         reject(new Error(`ffmpeg exited with code ${code}: ${stderrData}`));
+//       }
+//     });
+//
+//     inputStream.pipe(ffmpegProcess.stdin);
+//
+//     inputStream.on('error', (err) => {
+//       console.error('Error in inputStream', err);
+//       ffmpegProcess.stdin.end();
+//       reject(err);
+//     });
+//   });
+// }
+
+async function getMessage(key: proto.IMessageKey, full = false) {
+  try {
+    const webMessageInfo = store.getAllMessages(key.remoteJid!);
+
+    if (full) {
+      return webMessageInfo[0];
+    }
+    if (webMessageInfo[0].message?.pollCreationMessage) {
+      const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
+
+      if (typeof messageSecretBase64 === 'string') {
+        const messageSecret = Buffer.from(messageSecretBase64, 'base64');
+
+        const msg = {
+          messageContextInfo: { messageSecret },
+          pollCreationMessage: webMessageInfo[0].message?.pollCreationMessage,
+        };
+
+        return msg;
+      }
+    }
+
+    return webMessageInfo[0].message;
+  } catch (error) {
+    return { conversation: '' };
+  }
+}
+
+interface IgetBase64FromMediaMessage {
+  message: proto.IWebMessageInfo;
+  convertToMp4?: boolean;
+};
+
+async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBuffer = false) {
+  try {
+    const m = data?.message;
+    // const convertToMp4 = data?.convertToMp4 ?? false;
+
+    const msg = m?.message ? m : ((await getMessage(m.key, true)) as proto.IWebMessageInfo);
+
+    if (!msg) {
+      throw 'Message not found';
+    }
+
+    if (msg.message) {
+      const mm = msg.message;
+      if ("ephemeralMessage" in mm) {
+        msg.message = mm['ephemeralMessage']?.message;
+      } else if ("documentWithCaptionMessage" in mm) {
+        msg.message = mm['documentWithCaptionMessage']?.message;
+      } else if ("viewOnceMessage" in mm) {
+        msg.message = mm['viewOnceMessage']?.message;
+      } else if ("viewOnceMessageV2" in mm) {
+        msg.message = mm['viewOnceMessageV2']?.message;
+      }
+      //   if (msg.message![subtype] && subtype === "ephemeralMessage" || subtype === "documentWithCaptionMessage" || subtype === "viewOnceMessage" || subtype === "viewOnceMessageV2") {
+      //     msg.message = msg.message![subtype]?.message;
+      //   }
+      // }
+      if ('messageContextInfo' in mm && Object.keys(mm).length === 1) {
+        throw 'The message is messageContextInfo';
+      }
+
+      interface ISize {
+        fileLength: number | Long;
+        height: number;
+        width: number;
+      }
+
+      let mediaMessage: proto.Message.IImageMessage | proto.Message.IDocumentMessage | proto.Message.IAudioMessage | proto.Message.IVideoMessage | proto.Message.IStickerMessage | undefined = undefined;
+      let size: ISize | undefined;
+      let mediaType: string = "";
+      let caption: string = "";
+      let mimetype: string = "";
+      let ext: string | boolean = "";
+
+      if (!sock) {
+        throw 'socket not ready!';
+      }
+
+      const buffer = await downloadMediaMessage(
+        { key: msg.key, message: mm },
+        "buffer",
+        {},
+        { logger: logger, reuploadRequest: sock.updateMediaMessage },
+      );
+
+      const fileName = `${msg.key.id}.${ext}` || `${v4()}.${ext}`;
+
+      return {
+        mediaType,
+        fileName,
+        caption,
+        size,
+        mimetype,
+        base64: buffer.toString('base64'),
+        buffer: getBuffer ? buffer : null,
+      };
+    }
+
+
+    // if (typeof mediaMessage['mediaKey'] === 'object') {
+    //   msg.message = JSON.parse(JSON.stringify(msg.message));
+    // }
+
+    // const buffer = await downloadMediaMessage(
+    //   { key: msg?.key, message: msg?.message },
+    //   'buffer',
+    //   {},
+    //   { logger: P({ level: 'error' }) as any, reuploadRequest: this.client.updateMediaMessage },
+    // );
+
+    // const typeMessage = getContentType(msg.message!);
+
+
+    // if (convertToMp4 && typeMessage === 'audioMessage') {
+    //   try {
+    //     const convert = await this.processAudioMp4(buffer.toString('base64'));
+    //
+    //     if (Buffer.isBuffer(convert)) {
+    //       const result = {
+    //         mediaType,
+    //         fileName,
+    //         caption: mediaMessage['caption'],
+    //         size: {
+    //           fileLength: mediaMessage['fileLength'],
+    //           height: mediaMessage['height'],
+    //           width: mediaMessage['width'],
+    //         },
+    //         mimetype: 'audio/mp4',
+    //         base64: convert.toString('base64'),
+    //         buffer: getBuffer ? convert : null,
+    //       };
+    //
+    //       return result;
+    //     }
+    //   } catch (error) {
+    //     this.logger.error('Error converting audio to mp4:');
+    //     this.logger.error(error);
+    //     throw new BadRequestException('Failed to convert audio to MP4');
+    //   }
+    // }
+
+  } catch (error) {
+    logger.error('Error processing media message:');
+    logger.error(error);
+    throw new Error("Error processing media message:");
+  }
+}
 
 // Swagger UI
 app.use(openAPIRouter);
