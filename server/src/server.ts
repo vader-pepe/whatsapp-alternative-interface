@@ -3,9 +3,8 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
 import { Transform } from "stream";
-import mimeTypes from "mime-types";
 import { v4 } from "uuid";
-import { type proto, getContentType, downloadMediaMessage, downloadContentFromMessage } from "baileys";
+import { type proto, downloadMediaMessage } from "baileys";
 
 import { healthCheckRouter } from "@/api/healthCheck/healthCheckRouter";
 import { userRouter } from "@/api/user/userRouter";
@@ -13,7 +12,7 @@ import { openAPIRouter } from "@/api-docs/openAPIRouter";
 import errorHandler from "@/common/middleware/errorHandler";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
-import { store, sock, getMimeType } from ".";
+import { store, sock } from ".";
 
 export async function transformToBuffer(
   transformStream: Transform,
