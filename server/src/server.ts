@@ -2,12 +2,13 @@ import cors from "cors";
 import express, { type Request, type Response, type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
-import { Transform } from "stream";
+import { type Transform } from "stream";
 import { v4 } from "uuid";
 import { type proto, AnyMessageContent, downloadMediaMessage } from "baileys";
 import axios from "axios";
 import multer from "multer";
 import fs from "fs";
+import path from "path";
 
 import { healthCheckRouter } from "@/api/healthCheck/healthCheckRouter";
 import { userRouter } from "@/api/user/userRouter";
@@ -17,7 +18,7 @@ import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { store, sock, sendMessageWTyping } from ".";
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: path.resolve('uploads/') });
 
 export async function transformToBuffer(
   transformStream: Transform,
@@ -44,7 +45,7 @@ const logger = pino({
   transport: {
     targets: [
       { target: "pino-pretty", options: { colorize: true }, level: "info" },
-      { target: "pino/file", options: { destination: "./logs.txt" }, level: "info" }
+      { target: "pino/file", options: { destination: path.resolve("./logs.txt") }, level: "info" }
     ]
   }
 });

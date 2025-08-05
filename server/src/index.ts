@@ -3,32 +3,33 @@ import { app, logger } from "@/server";
 
 import { Boom } from '@hapi/boom'
 import { Server, type Socket } from "socket.io";
+import path from "path";
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
 import makeWASocket, {
-  type AnyMessageContent,
-  BinaryInfo,
   delay,
-  DisconnectReason,
   encodeWAM,
   fetchLatestBaileysVersion,
   getAggregateVotesInPollMessage,
   isJidNewsletter,
   makeCacheableSignalKeyStore,
   proto,
+  initAuthCreds,
+  BufferJSON,
+  BinaryInfo,
+  DisconnectReason,
+  type AnyMessageContent,
   type GroupMetadata,
   type WAMessageKey,
   type WASocket,
-  BufferJSON,
   type AuthenticationState,
   type AuthenticationCreds,
-  initAuthCreds,
   type MiscMessageGenerationOptions,
 } from 'baileys';
 import fs from 'fs'
 import Database from "better-sqlite3";
 
-const db = new Database("store.db");
+const db = new Database(path.resolve("store.db"));
 db.exec(`
   CREATE TABLE IF NOT EXISTS auth_creds (
     id INTEGER PRIMARY KEY CHECK (id = 1),
