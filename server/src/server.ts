@@ -2,7 +2,6 @@ import cors from "cors";
 import express, { type Request, type Response, type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
-import { type Transform } from "stream";
 import { v4 } from "uuid";
 import { type proto, AnyMessageContent, downloadMediaMessage } from "baileys";
 import axios from "axios";
@@ -19,26 +18,6 @@ import { env } from "@/common/utils/envConfig";
 import { store, sock, sendMessageWTyping } from ".";
 
 const upload = multer({ dest: path.resolve('app-data/uploads/') });
-
-export async function transformToBuffer(
-  transformStream: Transform,
-): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-
-  return new Promise<Buffer>((resolve, reject) => {
-    transformStream.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    transformStream.on("end", () => {
-      resolve(Buffer.concat(chunks));
-    });
-
-    transformStream.on("error", (err) => {
-      reject(err);
-    });
-  });
-}
 
 const logger = pino({
   level: "info",
@@ -102,15 +81,17 @@ app.get("/media/:jid/:id", async function(req, res) {
 });
 
 app.get("/mediaproxy/:url", async function(req, res) {
+  // NOTE: dont forget to encode first!
   const encoded = req.params.url;
   const upstreamUrl = decodeURIComponent(encoded);
-  const raw = await axios.get(upstreamUrl, { responseType: "arraybuffer" });
-  if (!raw.data) {
+  const response = await axios.get(upstreamUrl, { responseType: 'stream' });
+  if (!response.data) {
     return res.status(404);
   }
-  res.set("Content-Type", raw.headers["content-type"] || "application/octet-stream");
-  // TODO: fix show buffer
-  res.send(raw.data);
+  const contentType = response.headers['content-type'] || 'application/octet-stream'
+  res.setHeader('Content-Type', contentType)
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  return response.data.pipe(res);
 });
 
 async function formatStatusMessage(params: {
