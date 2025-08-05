@@ -1,119 +1,147 @@
-# 🚀 Express TypeScript Boilerplate 2025
+## Endpoint
 
-[![CI](https://github.com/edwinhern/express-typescript/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/edwinhern/express-typescript-2024/actions/workflows/ci.yml)
+**POST** `/send`
 
-```code
-Hey There! 🙌
-🤾 that ⭐️ button if you like this boilerplate.
+### Content Types
+
+* `application/json` for text/status messages.
+* `multipart/form-data` for media messages.
+
+### Fields
+
+| Field             | Type   | Required?   | Description                                                                 |
+| ----------------- | ------ | ----------- | --------------------------------------------------------------------------- |
+| `type`            | string | **Yes**     | One of: `text`, `image`, `video`, `sticker`, `audio`, `document`, `status`. |
+| `to`              | string | No\*        | Target JID or phone number. Optional if `allContacts` is true or `status`.  |
+| `text`            | string | Conditional | Message or text-based status.                                               |
+| `caption`         | string | No          | Caption for media.                                                          |
+| `filename`        | string | No          | File name for documents.                                                    |
+| `ptt`             | string | No          | Send audio as PTT (`true`/`false`).                                         |
+| `allContacts`     | string | No          | `true` to send to all contacts.                                             |
+| `statusType`      | string | Conditional | For `status` messages: `text`, `image`, `video`, `audio`.                   |
+| `backgroundColor` | string | Conditional | For text statuses.                                                          |
+| `font`            | string | Conditional | For text statuses.                                                          |
+| `statusJidList`   | string | No          | JSON array of JIDs for statuses.                                            |
+| `file`            | binary | Conditional | Media upload for non-text messages.                                         |
+
+> **Media messages** require `multipart/form-data` and `file`.
+
+## Examples
+
+## 1. Send Text Message
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "text",
+    "to": "628123456789",
+    "text": "Hello from Baileys!"
+  }'
 ```
 
-## 🌟 Introduction
+## 2. Send Image
 
-Welcome to Express TypeScript Boilerplate 2025 – a simple and ready-to-use starting point for building backend web services with Express.js and TypeScript.
-
-## 💡 Why We Made This
-
-This starter kit helps you:
-
-- ✨ Start new projects faster
-- 📊 Write clean, consistent code
-- ⚡ Build things quickly
-- 🛡️ Follow best practices for security and testing
-
-## 🚀 What's Included
-
-- 📁 Well-organized folders: Files grouped by feature so you can find things easily
-- 💨 Fast development: Quick code running with `tsx` and error checking with `tsc`
-- 🌐 Latest Node.js: Uses the newest stable Node.js version from `.tool-versions`
-- 🔧 Safe settings: Environment settings checked with Zod to prevent errors
-- 🔗 Short import paths: Clean code with easy imports using path shortcuts
-- 🔄 Auto-updates: Keeps dependencies up-to-date with Renovate
-- 🔒 Better security: Built-in protection with Helmet and CORS settings
-- 📊 Easy tracking: Built-in logging with `pino-http`
-- 🧪 Ready-to-test: Testing tools with Vitest and Supertest already set up
-- ✅ Clean code: Consistent coding style with `Biomejs`
-- 📃 Standard responses: Unified API responses using `ServiceResponse`
-- 🐳 Easy deployment: Ready for Docker containers
-- 📝 Input checking: Request validation using Zod
-- 🧩 API browser: Interactive API docs with Swagger UI
-
-## 🛠️ Getting Started
-
-### Video Demo
-
-For a visual guide, watch the [video demo](https://github.com/user-attachments/assets/b1698dac-d582-45a0-8d61-31131732b74e) to see the setup and running of the project.
-
-### Step-by-Step Guide
-
-#### Step 1: 🚀 Initial Setup
-
-- Clone the repository: `git clone https://github.com/edwinhern/express-typescript.git`
-- Navigate: `cd express-typescript`
-- Install dependencies: `pnpm install`
-
-#### Step 2: ⚙️ Environment Configuration
-
-- Create `.env`: Copy `.env.template` to `.env`
-- Update `.env`: Fill in necessary environment variables
-
-#### Step 3: 🏃‍♂️ Running the Project
-
-- Development Mode: `pnpm start:dev`
-- Building: `pnpm build`
-- Production Mode: Set `NODE_ENV="production"` in `.env` then `pnpm build && pnpm start:prod`
-
-## 🤝 Feedback and Contributions
-
-We'd love to hear your feedback and suggestions for further improvements. Feel free to contribute and join us in making backend development cleaner and faster!
-
-🎉 Happy coding!
-
-## 📁 Folder Structure
-
-```code
-├── biome.json
-├── Dockerfile
-├── LICENSE
-├── package.json
-├── pnpm-lock.yaml
-├── README.md
-├── src
-│   ├── api
-│   │   ├── healthCheck
-│   │   │   ├── __tests__
-│   │   │   │   └── healthCheckRouter.test.ts
-│   │   │   └── healthCheckRouter.ts
-│   │   └── user
-│   │       ├── __tests__
-│   │       │   ├── userRouter.test.ts
-│   │       │   └── userService.test.ts
-│   │       ├── userController.ts
-│   │       ├── userModel.ts
-│   │       ├── userRepository.ts
-│   │       ├── userRouter.ts
-│   │       └── userService.ts
-│   ├── api-docs
-│   │   ├── __tests__
-│   │   │   └── openAPIRouter.test.ts
-│   │   ├── openAPIDocumentGenerator.ts
-│   │   ├── openAPIResponseBuilders.ts
-│   │   └── openAPIRouter.ts
-│   ├── common
-│   │   ├── __tests__
-│   │   │   ├── errorHandler.test.ts
-│   │   │   └── requestLogger.test.ts
-│   │   ├── middleware
-│   │   │   ├── errorHandler.ts
-│   │   │   ├── rateLimiter.ts
-│   │   │   └── requestLogger.ts
-│   │   ├── models
-│   │   │   └── serviceResponse.ts
-│   │   └── utils
-│   │       ├── commonValidation.ts
-│   │       ├── envConfig.ts
-│   │       └── httpHandlers.ts
-│   ├── index.ts
-│   └── server.ts
-├── tsconfig.json
-└── vite.config.mts
+```bash
+curl -X POST http://localhost:3000/send \
+  -F type=image \
+  -F to=628123456789 \
+  -F caption="Check out this photo" \
+  -F file=@/path/to/image.jpg
 ```
+
+## 3. Send Video
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -F type=video \
+  -F to=628123456789 \
+  -F caption="Watch this" \
+  -F file=@/path/to/video.mp4
+```
+
+## 4. Send Sticker
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -F type=sticker \
+  -F to=628123456789 \
+  -F file=@/path/to/sticker.webp
+```
+
+## 5. Send Audio (Voice Note)
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -F type=audio \
+  -F to=628123456789 \
+  -F ptt=true \
+  -F file=@/path/to/audio.ogg
+```
+
+## 6. Send Document
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -F type=document \
+  -F to=628123456789 \
+  -F filename="report.pdf" \
+  -F file=@/path/to/document.pdf
+```
+
+## 7. Post Text Status
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "status",
+    "statusType": "text",
+    "text": "Good morning!",
+    "backgroundColor": "#00FF00",
+    "font": "1",
+    "allContacts": "true"
+  }'
+```
+
+## 8. Post Image Status
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -F type=status \
+  -F statusType=image \
+  -F caption="New Day!" \
+  -F allContacts=true \
+  -F file=@/path/to/photo.jpg
+```
+
+## 9. Send Text to All Contacts
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "text",
+    "text": "Hello everyone!",
+    "allContacts": "true"
+  }'
+```
+
+## Fixes in Route
+
+* Fixed early `return` inside loops.
+* Awaited `getAllContactJids()` for contact loading.
+* Safe font parsing to number.
+* Deferred file deletion until after all sends.
+* Added explicit sticker handling.
+
+## Recommendations
+
+* Add authentication.
+* Validate file size/type.
+* Use async file deletion.
+* Batch large broadcasts.
+
+## License
+
+MIT
