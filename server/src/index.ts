@@ -6,7 +6,7 @@ import { Server, type Socket } from "socket.io";
 import NodeCache from '@cacheable/node-cache'
 import readline from 'readline'
 import makeWASocket, {
-  AnyMessageContent,
+  type AnyMessageContent,
   BinaryInfo,
   delay,
   DisconnectReason,
@@ -16,13 +16,14 @@ import makeWASocket, {
   isJidNewsletter,
   makeCacheableSignalKeyStore,
   proto,
-  GroupMetadata,
-  WAMessageKey,
-  WASocket,
+  type GroupMetadata,
+  type WAMessageKey,
+  type WASocket,
   BufferJSON,
-  AuthenticationState,
-  AuthenticationCreds,
+  type AuthenticationState,
+  type AuthenticationCreds,
   initAuthCreds,
+  type MiscMessageGenerationOptions,
 } from 'baileys';
 import fs from 'fs'
 import Database from "better-sqlite3";
@@ -74,7 +75,7 @@ const doReplies = process.argv.includes('--do-reply')
 const usePairingCode = process.argv.includes('--use-pairing-code')
 let isHistorySyncRunning = false;
 export let sock: WASocket | null = null;
-export let sendMessageWTyping: (msg: AnyMessageContent, jid: string) => Promise<void>
+export let sendMessageWTyping: (msg: AnyMessageContent, jid: string, options?: MiscMessageGenerationOptions) => Promise<void>
 
 // external map to store retry counts of messages when decryption/encryption fails
 // keep this out of the socket itself, so as to prevent a message decryption/encryption loop across socket restarts
@@ -319,16 +320,16 @@ const startSock = async () => {
     logger.info(`Pairing code: ${code}`)
   }
 
-  sendMessageWTyping = async (msg: AnyMessageContent, jid: string) => {
-    await sock!.presenceSubscribe(jid)
-    await delay(500)
+  sendMessageWTyping = async (msg: AnyMessageContent, jid: string, options?: MiscMessageGenerationOptions) => {
+    await sock!.presenceSubscribe(jid);
+    await delay(500);
 
-    await sock!.sendPresenceUpdate('composing', jid)
-    await delay(2000)
+    await sock!.sendPresenceUpdate('composing', jid);
+    await delay(2000);
 
-    await sock!.sendPresenceUpdate('paused', jid)
+    await sock!.sendPresenceUpdate('paused', jid);
 
-    await sock!.sendMessage(jid, msg)
+    await sock!.sendMessage(jid, msg, options);
   }
 
   // the process function lets you process all events that just occurred

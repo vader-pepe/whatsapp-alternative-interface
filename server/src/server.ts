@@ -1,5 +1,5 @@
 import cors from "cors";
-import express, { type Express } from "express";
+import express, { type Request, type Response, type Express } from "express";
 import helmet from "helmet";
 import { pino } from "pino";
 import { Transform } from "stream";
@@ -112,86 +112,173 @@ app.get("/mediaproxy/:url", async function(req, res) {
   res.send(raw.data);
 });
 
-app.post('/send', upload.single('file'), async (req, res) => {
-  const { to, type, text, caption } = req.body;
-  const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+async function formatStatusMessage(params: {
+  type: 'text' | 'image' | 'video' | 'audio'
+  content: string        // either a path or base64/text
+  caption?: string
+  backgroundColor?: string
+  font?: number
+  statusJidList: string[]
+}) {
+  switch (params.type) {
+    case 'text':
+      if (!params.backgroundColor || !params.font) {
+        throw new Error('text status needs backgroundColor & font')
+      }
+      return {
+        content: { text: params.content },
+        options: {
+          backgroundColor: params.backgroundColor,
+          font: params.font,
+          statusJidList: params.statusJidList
+        }
+      }
 
-  const file = req.file;
+    case 'image':
+    case 'video':
+      return {
+        content:
+          params.type === 'image'
+            ? { image: { url: params.content }, caption: params.caption }
+            : { video: { url: params.content }, caption: params.caption },
+        options: { statusJidList: params.statusJidList }
+      }
 
-  if (!file) return res.status(404);
+    case 'audio':
+      return {
+        content: {
+          audio: { url: params.content },
+          ptt: true as const,
+          mimetype: 'audio/ogg; codecs=opus'
+        },
+        options: { statusJidList: params.statusJidList }
+      }
 
-  try {
-    let message: AnyMessageContent;
+    default:
+      throw new Error(`Unsupported status type ${params.type}`)
+  }
+}
 
-    switch (type) {
-      case 'text':
-        message = { text };
-        break;
+function getAllContactJids() {
+  return store.getAllChats().map(c => c.jid).filter(jid => jid.endsWith('@s.whatsapp.net'));
+}
 
-      case 'image':
-        message = {
-          image: { url: file.path },
-          caption: caption ?? '',
-          mimetype: file.mimetype,
-        };
-        break;
+export type MessageType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'sticker'
+  | 'audio'
+  | 'document'
+  | 'status';
 
-      case 'video':
-        message = {
-          video: { url: file.path },
-          caption: caption ?? '',
-          mimetype: file.mimetype,
-        };
-        break;
+export type StatusType = 'text' | 'image' | 'video' | 'audio';
 
-      case 'sticker':
-        message = {
-          sticker: { url: file.path },
-          mimetype: file.mimetype,
-        };
-        break;
+export interface SendRequestBody {
+  to?: string;
+  type: MessageType;
+  text?: string;
+  caption?: string;
+  filename?: string;
+  ptt?: 'true' | 'false';       // multer gives you strings
+  // status‐specific
+  statusType?: StatusType;
+  backgroundColor?: string;
+  font?: string;                // parse to number later
+  allContacts?: 'true' | 'false';
+  statusJidList?: string[];
+}
 
-      case 'audio':
-        message = {
-          audio: { url: file.path },
-          mimetype: file.mimetype,
-          ptt: req.body.ptt === 'true',
-        };
-        break;
+app.post(
+  '/send',
+  upload.single('file'),
+  async (req: Request<{}, {}, SendRequestBody>, res: Response) => {
+    const {
+      to = "",
+      type,
+      text,
+      caption,
+      filename,
+      ptt,
+      statusType,
+      backgroundColor,
+      font,
+      allContacts,
+      statusJidList,
+    } = req.body;
 
-      case 'document':
-        message = {
-          document: { url: file.path },
-          fileName: req.body.filename,
-          mimetype: file.mimetype,
-        };
-        break;
-
-      default:
-        return res.status(400).json({ success: false, error: 'Unsupported message type' });
+    const useAll = allContacts === 'true';
+    const baseJid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    const needsFile = ['image', 'video', 'sticker', 'audio', 'document'] as const;
+    if (needsFile.includes(type as any) && !req.file) {
+      return res.status(400).json({ success: false, error: `Missing file for ${type}` });
     }
 
-    await sendMessageWTyping(message, jid);
+    const targets = type === 'status'
+      ? ['status@broadcast']
+      : useAll
+        ? getAllContactJids()
+        : [baseJid];
 
-    // Clean-up uploaded file
-    if (req.file) fs.unlinkSync(req.file.path);
+    try {
+      if (type === 'status') {
+        const list = useAll ? getAllContactJids() : statusJidList;
+        const fontNum = parseInt(font ?? '0', 10);
+        if (isNaN(fontNum)) {
+          return res.status(400).json({ success: false, error: 'font must be a number' });
+        }
+        const { content: statusContent, options: statusOptions } = await formatStatusMessage({
+          type: statusType ?? 'text',
+          content: req.file ? req.file.path : text!,
+          caption,
+          backgroundColor,
+          font: fontNum,
+          statusJidList: list ?? [],
+        });
 
-    res.json({ success: true, type, to: jid });
-  } catch (err) {
-    logger.error(err);
-    if (req.file) fs.unlinkSync(req.file.path);
-    res.status(500).json({ success: false, error: err ?? "" });
+        for (const jid of targets) {
+          await sendMessageWTyping(statusContent, jid, statusOptions);
+        }
+        if (req.file) fs.unlink(req.file.path, () => { });
+        return res.json({ success: true, type: 'status', to: targets });
+      }
+
+      let message: AnyMessageContent;
+      switch (type) {
+        case 'text':
+          message = { text: text ?? '' };
+          break;
+        case 'image':
+          message = { image: { url: req.file!.path }, caption: caption ?? '', mimetype: req.file!.mimetype };
+          break;
+        case 'video':
+          message = { video: { url: req.file!.path }, caption: caption ?? '', mimetype: req.file!.mimetype };
+          break;
+        case 'sticker':
+          message = { sticker: { url: req.file!.path }, mimetype: req.file!.mimetype };
+          break;
+        case 'audio':
+          message = { audio: { url: req.file!.path }, mimetype: req.file!.mimetype, ptt: ptt === 'true' };
+          break;
+        case 'document':
+          message = { document: { url: req.file!.path }, fileName: filename, mimetype: req.file!.mimetype };
+          break;
+        default:
+          return res.status(400).json({ success: false, error: `Unsupported message type "${type}"` });
+      }
+
+      for (const jid of targets) {
+        await sendMessageWTyping(message, jid);
+      }
+      if (req.file) fs.unlink(req.file.path, () => { });
+      return res.json({ success: true, type, to: targets });
+    } catch (err: any) {
+      logger.error(err);
+      if (req.file) fs.unlink(req.file.path, () => { });
+      return res.status(500).json({ success: false, error: err.message || String(err) });
+    }
   }
-});
-
-
-// function isEmoji(str: string) {
-//   if (str === '') return true;
-//
-//   const emojiRegex =
-//     /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}]$/u;
-//   return emojiRegex.test(str);
-// }
+);
 
 async function getMessage(key: proto.IMessageKey, full = false) {
   try {
