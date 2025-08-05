@@ -1,4 +1,4 @@
-import { createSignal, For, onMount } from "solid-js";
+import { createSignal, For, JSX, onMount } from "solid-js";
 import { type Socket } from 'socket.io-client';
 import { type BaileysEventMap, type proto } from "baileys";
 import axios from "axios";
@@ -6,6 +6,11 @@ import { Chat } from "../../App";
 import { ChatBubbles } from "../chat-bubbles";
 
 const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
+
+interface PastedImage {
+  id: number;
+  src: string;
+}
 
 export function ChatWindow({
   currentChat,
@@ -23,6 +28,8 @@ export function ChatWindow({
   const [offset, setOffset] = createSignal(0);
   let container: HTMLElement | null = null;
   let inputElement: HTMLElement | null = null;
+  const [images, setImages] = createSignal<PastedImage[]>([]);
+  let nextId = 1;
 
   socket.on("messages.upsert", function(msg) {
     const webMessage = msg as BaileysEventMap['messages.upsert'];
@@ -38,6 +45,24 @@ export function ChatWindow({
       setMessages((prev) => [...m.data, ...prev]);
     }
   }
+
+  const handlePaste: JSX.EventHandler<HTMLTextAreaElement, ClipboardEvent> = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          const src = URL.createObjectURL(file);
+          setImages((prev) => [
+            ...prev,
+            { id: nextId++, src },
+          ]);
+        }
+      }
+    }
+  };
 
   onMount(async () => {
     if (inputElement) {
@@ -84,7 +109,7 @@ export function ChatWindow({
           </button>
         </div>
         <For each={messages()} fallback={<span class="loading loading-spinner loading-md block"></span>}>
-          {(message) => <ChatBubbles messageInfo={message} />}
+          {(message) => <ChatBubbles id={currentChat.jid} messageInfo={message} />}
         </For>
       </div>
 
@@ -95,7 +120,10 @@ export function ChatWindow({
           // await sendMessage(currentChat.id);
         }}
       >
-        <input
+        <textarea
+          rows={5}
+          cols={40}
+          onPaste={handlePaste}
           ref={(el) => (inputElement = el)}
           oninput={(e) => setMessage(e.target.value)}
           value={message()}
@@ -104,6 +132,15 @@ export function ChatWindow({
         />
         <button type="submit" class="btn btn-accent absolute bottom-5 right-2">Send</button>
       </form>
+      <div class="pasted-images">
+        <For each={images()}>
+          {(img) => (
+            <div >
+              <img src={img.src} alt="pasted" style={{ "max-width": "200px" }} />
+            </div>
+          )}
+        </For>
+      </div>
     </div>
   );
 };

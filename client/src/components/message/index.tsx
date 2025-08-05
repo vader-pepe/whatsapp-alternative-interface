@@ -9,21 +9,38 @@ const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
  */
 export function GetMessage({
   messageInfo,
+  jid,
 }: {
   messageInfo:
   | proto.IWebMessageInfo
   | proto.IContextInfo
   | proto.Message.IFutureProofMessage
   | proto.Message.IProtocolMessage;
+  jid?: string;
 }): JSX.Element {
   let message: proto.IMessage | undefined | null = null;
   let mediaUrl = API_URL + `/media/`;
+  let chatId: string | undefined = jid;
+  let messageId: string | undefined;
+  let isNewsLetter = false;
+
   if ("message" in messageInfo) {
     message = messageInfo.message;
   } else if ("quotedMessage" in messageInfo) {
     message = messageInfo.quotedMessage;
   } else if ("editedMessage" in messageInfo) {
     message = messageInfo.editedMessage;
+  }
+
+  if ("key" in messageInfo) {
+    if (messageInfo.key?.remoteJid?.includes("@newsletter")) {
+      isNewsLetter = true;
+    }
+
+    chatId = messageInfo.key?.remoteJid ?? undefined;
+    messageId = messageInfo.key?.id ?? undefined;
+  } else if ("stanzaId" in messageInfo) {
+    messageId = messageInfo.stanzaId ?? undefined;
   }
 
   if ("reactions" in messageInfo) {
@@ -34,25 +51,40 @@ export function GetMessage({
   }
 
   if (!message) return null;
-  if ("key" in messageInfo) {
-    let chatId = `${messageInfo.key!.remoteJid}`;
-    mediaUrl += `${chatId}/${messageInfo.key!.id}`;
-  }
+
   const res = match(message)
     .with({ conversation: P.any }, () => <small>{message.conversation}</small>)
     .with({ imageMessage: P.any }, () => {
+      if (isNewsLetter) {
+        if (message.imageMessage?.url) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.imageMessage.url)}`;
+        } else if (message.imageMessage?.directPath) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["imageMessage"]?.directPath}`)}`;
+        }
+      } else {
+        mediaUrl = mediaUrl + `${chatId}/${messageId}`;
+      }
       const caption = message.imageMessage!.caption;
 
       if (caption)
         return (
           <>
-            <img crossorigin="anonymous" src={mediaUrl} alt="link broken or missing from server" />{" "}
+            <img crossorigin="anonymous" src={mediaUrl} alt="unavailable" />{" "}
             <small>{caption}</small>
           </>
         );
-      return <img crossorigin="anonymous" src={mediaUrl} alt="link broken or missing from server" />;
+      return <><img crossorigin="anonymous" src={mediaUrl} alt="unavailable" /></>;
     })
     .with({ videoMessage: P.any }, () => {
+      if (isNewsLetter) {
+        if (message.imageMessage?.url) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.imageMessage.url)}`;
+        } else if (message.imageMessage?.directPath) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["imageMessage"]?.directPath}`)}`;
+        }
+      } else {
+        mediaUrl = mediaUrl + `${chatId}/${messageId}`;
+      }
       const caption = message.videoMessage!.caption;
       if (caption) {
         return (
@@ -64,6 +96,15 @@ export function GetMessage({
       return <video crossorigin="anonymous" src={mediaUrl} />;
     })
     .with({ stickerMessage: P.any }, () => {
+      if (isNewsLetter) {
+        if (message.imageMessage?.url) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.imageMessage.url)}`;
+        } else if (message.imageMessage?.directPath) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["imageMessage"]?.directPath}`)}`;
+        }
+      } else {
+        mediaUrl = mediaUrl + `${chatId}/${messageId}`;
+      }
       return (
         <small>
           sticker:{" "}
@@ -86,111 +127,18 @@ export function GetMessage({
       }
       return JSON.stringify(message.extendedTextMessage);
     })
-    .with({ viewOnceMessageV2: P.any }, () =>
-      GetMessage({ messageInfo: message.viewOnceMessageV2! }),
-    )
-    .with({ viewOnceMessageV2Extension: P.any }, () => GetMessage({ messageInfo: message.viewOnceMessageV2Extension! }))
-    .with({ viewOnceMessage: P.any }, () => GetMessage({ messageInfo: message.viewOnceMessage! }))
-    .with({ editedMessage: P.any }, () =>
-      GetMessage({ messageInfo: message.editedMessage! }),
-    )
-    .with({ protocolMessage: P.any }, () => {
-      const edited = message.protocolMessage!.editedMessage;
-      if (!edited) {
-        return JSON.stringify(message.protocolMessage);
-      }
-      return GetMessage({ messageInfo: message.protocolMessage! });
-    })
-    .with({ viewOnceMessageV2Extension: P.any }, () =>
-      GetMessage({ messageInfo: message.viewOnceMessageV2Extension! }),
-    )
+    // .with({ protocolMessage: P.any }, () => {
+    //   const edited = message.protocolMessage!.editedMessage;
+    //   if (!edited) {
+    //     return JSON.stringify(message.protocolMessage);
+    //   }
+    //   return GetMessage({ messageInfo: message.protocolMessage!, extra: { jid: chatId, messageId } });
+    // })
+    // .with({ associatedChildMessage: P.any }, () => GetMessage({ messageInfo: message.associatedChildMessage!, extra: { jid: chatId, messageId } }))
     // TODO: handle documents
-    .with({ documentMessage: P.any }, () => "Secret Document")
-    .with({ documentWithCaptionMessage: P.any }, () => "Secret Document")
+    .with({ documentMessage: P.any }, () => "Document")
+    .with({ documentWithCaptionMessage: P.any }, () => "Document with Caption")
     .otherwise(() => JSON.stringify(message));
-
-  // if (message.conversation) {
-  //   return <small>{message.conversation}</small>;
-  // }
-  //
-  // if (message.imageMessage) {
-  //   const text = message.imageMessage.caption;
-  //   const encription = message.imageMessage.fileSha256 as unknown as
-  //     | string
-  //     | null
-  //     | undefined;
-  //   const mime = message.imageMessage.mimetype;
-  //
-  //   // if (text && mime && encription) {
-  //   //   const ext = mime.split("/");
-  //   //   return (
-  //   //     <>
-  //   //       <img
-  //   //         src={`data:${message.imageMessage.mimetype};base64, ${message.imageMessage.jpegThumbnail}`}
-  //   //       />
-  //   //       <small>{text}</small>
-  //   //     </>
-  //   //   );
-  //   // }
-  //   //
-  //   // if (mime && encription) {
-  //   //   return (
-  //   //     <img
-  //   //       src={`data:${message.imageMessage.mimetype};base64, ${message.imageMessage.jpegThumbnail}`}
-  //   //       alt="not yet fetched"
-  //   //     />
-  //   //   );
-  //   // }
-  //   return <span class="loading loading-spinner loading-md"></span>;
-  // }
-  //
-  // if (message.videoMessage) {
-  //   return <span class="loading loading-spinner loading-md"></span>;
-  //   // return <img src="/video.jpeg" />;
-  // }
-  //
-  // if (message.stickerMessage) {
-  //   return <span class="loading loading-spinner loading-md"></span>;
-  //   // const mime = message.stickerMessage.mimetype;
-  //   // const encription = message.stickerMessage.fileSha256 as unknown as string;
-  //   // if (mime && encription) {
-  //   //   const ext = mime.split("/");
-  //   //   return <img src={``} alt="not yet fetched" />;
-  //   // }
-  //   // return <img src="/sticker.jpeg" />;
-  // }
-  //
-  // if (message.extendedTextMessage) {
-  //   const text = message.extendedTextMessage.text;
-  //   if (text) return <small>{text}</small>;
-  // }
-  //
-  // if (message.reactionMessage) {
-  //   const text = message.reactionMessage.text;
-  //   if (text) {
-  //     return <small>reacted: {text}</small>;
-  //   }
-  // }
-  //
-  // if (message.viewOnceMessageV2) {
-  //   return GetMessage({ messageInfo: message.viewOnceMessageV2 });
-  // }
-  //
-  // if (message.editedMessage) {
-  //   return GetMessage({ messageInfo: message.editedMessage });
-  // }
-  //
-  // if (message.protocolMessage) {
-  //   const edited = message.protocolMessage.editedMessage;
-  //   if (!edited) {
-  //     return JSON.stringify(message.protocolMessage);
-  //   }
-  //   return GetMessage({ messageInfo: message.protocolMessage });
-  // }
-  //
-  // if (message.viewOnceMessageV2Extension) {
-  //   return GetMessage({ messageInfo: message.viewOnceMessageV2Extension });
-  // }
 
   return res;
 }

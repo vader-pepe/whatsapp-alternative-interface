@@ -18,7 +18,7 @@ export function ChatBubbles({
   let participant: string | null | undefined = null;
 
   const setContextAndParticipant = (context: proto.IContextInfo) => {
-    extendedContent = GetMessage({ messageInfo: context });
+    extendedContent = GetMessage({ messageInfo: context, jid: id });
     participant = context.participant;
   };
 
