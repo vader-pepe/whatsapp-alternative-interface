@@ -18,7 +18,7 @@ import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { store, sock, sendMessageWTyping } from ".";
 
-const upload = multer({ dest: path.resolve('uploads/') });
+const upload = multer({ dest: path.resolve('app-data/uploads/') });
 
 export async function transformToBuffer(
   transformStream: Transform,
@@ -45,7 +45,7 @@ const logger = pino({
   transport: {
     targets: [
       { target: "pino-pretty", options: { colorize: true }, level: "info" },
-      { target: "pino/file", options: { destination: path.resolve("./logs.txt") }, level: "info" }
+      { target: "pino/file", options: { destination: path.resolve("./app-data/logs.txt") }, level: "info" }
     ]
   }
 });

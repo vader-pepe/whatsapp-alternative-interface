@@ -29,7 +29,7 @@ import makeWASocket, {
 import fs from 'fs'
 import Database from "better-sqlite3";
 
-const db = new Database(path.resolve("store.db"));
+const db = new Database(path.resolve("app-data/store.db"));
 db.exec(`
   CREATE TABLE IF NOT EXISTS auth_creds (
     id INTEGER PRIMARY KEY CHECK (id = 1),
