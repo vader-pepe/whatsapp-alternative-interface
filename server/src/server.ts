@@ -4,7 +4,10 @@ import helmet from "helmet";
 import { pino } from "pino";
 import { Transform } from "stream";
 import { v4 } from "uuid";
-import { type proto, downloadMediaMessage } from "baileys";
+import { type proto, AnyMessageContent, downloadMediaMessage } from "baileys";
+import axios from "axios";
+import multer from "multer";
+import fs from "fs";
 
 import { healthCheckRouter } from "@/api/healthCheck/healthCheckRouter";
 import { userRouter } from "@/api/user/userRouter";
@@ -12,7 +15,9 @@ import { openAPIRouter } from "@/api-docs/openAPIRouter";
 import errorHandler from "@/common/middleware/errorHandler";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
-import { store, sock } from ".";
+import { store, sock, sendMessageWTyping } from ".";
+
+const upload = multer({ dest: 'uploads/' });
 
 export async function transformToBuffer(
   transformStream: Transform,
@@ -95,100 +100,97 @@ app.get("/media/:jid/:id", async function(req, res) {
   return res.status(200).send(data.buffer);
 });
 
-app.post('/send', async (req, res) => {
-  const { jid, content, quoted, timestamp } = req.body;
-
-  if (!jid || !content) {
-    return res.status(400).json({ error: 'jid and content are required' });
-  }
-
-  if (!sock) {
+app.get("/mediaproxy/:url", async function(req, res) {
+  const encoded = req.params.url;
+  const upstreamUrl = decodeURIComponent(encoded);
+  const raw = await axios.get(upstreamUrl, { responseType: "arraybuffer" });
+  if (!raw.data) {
     return res.status(404);
   }
+  res.set("Content-Type", raw.headers["content-type"] || "application/octet-stream");
+  // TODO: fix show buffer
+  res.send(raw.data);
+});
+
+app.post('/send', upload.single('file'), async (req, res) => {
+  const { to, type, text, caption } = req.body;
+  const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+
+  const file = req.file;
+
+  if (!file) return res.status(404);
 
   try {
-    await sock.sendMessage(
-      jid,
-      content,
-      {
-        quoted,
-        timestamp: timestamp ? new Date(timestamp) : new Date(),
-      }
-    );
+    let message: AnyMessageContent;
 
-    res.status(200).json({ message: "Sent!" });
+    switch (type) {
+      case 'text':
+        message = { text };
+        break;
+
+      case 'image':
+        message = {
+          image: { url: file.path },
+          caption: caption ?? '',
+          mimetype: file.mimetype,
+        };
+        break;
+
+      case 'video':
+        message = {
+          video: { url: file.path },
+          caption: caption ?? '',
+          mimetype: file.mimetype,
+        };
+        break;
+
+      case 'sticker':
+        message = {
+          sticker: { url: file.path },
+          mimetype: file.mimetype,
+        };
+        break;
+
+      case 'audio':
+        message = {
+          audio: { url: file.path },
+          mimetype: file.mimetype,
+          ptt: req.body.ptt === 'true',
+        };
+        break;
+
+      case 'document':
+        message = {
+          document: { url: file.path },
+          fileName: req.body.filename,
+          mimetype: file.mimetype,
+        };
+        break;
+
+      default:
+        return res.status(400).json({ success: false, error: 'Unsupported message type' });
+    }
+
+    await sendMessageWTyping(message, jid);
+
+    // Clean-up uploaded file
+    if (req.file) fs.unlinkSync(req.file.path);
+
+    res.json({ success: true, type, to: jid });
   } catch (err) {
-    logger.error({ err }, 'Failed to send message:');
-    res.status(500).json({ error: 'Failed to send message' });
+    logger.error(err);
+    if (req.file) fs.unlinkSync(req.file.path);
+    res.status(500).json({ success: false, error: err ?? "" });
   }
 });
 
-// TODO: handle audio
-// async function processAudioMp4(audio: string) {
-//   let inputStream: PassThrough;
+
+// function isEmoji(str: string) {
+//   if (str === '') return true;
 //
-//   if (isURL(audio)) {
-//     const response = await axios.get(audio, { responseType: 'stream' });
-//     inputStream = response.data;
-//   } else {
-//     const audioBuffer = Buffer.from(audio, 'base64');
-//     inputStream = new PassThrough();
-//     inputStream.end(audioBuffer);
-//   }
-//
-//   return new Promise<Buffer>((resolve, reject) => {
-//     const ffmpegProcess = spawn(ffmpegPath.path, [
-//       '-i',
-//       'pipe:0',
-//       '-vn',
-//       '-ab',
-//       '128k',
-//       '-ar',
-//       '44100',
-//       '-f',
-//       'mp4',
-//       '-movflags',
-//       'frag_keyframe+empty_moov',
-//       'pipe:1',
-//     ]);
-//
-//     const outputChunks: Buffer[] = [];
-//     let stderrData = '';
-//
-//     ffmpegProcess.stdout.on('data', (chunk) => {
-//       outputChunks.push(chunk);
-//     });
-//
-//     ffmpegProcess.stderr.on('data', (data) => {
-//       stderrData += data.toString();
-//       this.logger.verbose(`ffmpeg stderr: ${data}`);
-//     });
-//
-//     ffmpegProcess.on('error', (error) => {
-//       console.error('Error in ffmpeg process', error);
-//       reject(error);
-//     });
-//
-//     ffmpegProcess.on('close', (code) => {
-//       if (code === 0) {
-//         this.logger.verbose('Audio converted to mp4');
-//         const outputBuffer = Buffer.concat(outputChunks);
-//         resolve(outputBuffer);
-//       } else {
-//         this.logger.error(`ffmpeg exited with code ${code}`);
-//         this.logger.error(`ffmpeg stderr: ${stderrData}`);
-//         reject(new Error(`ffmpeg exited with code ${code}: ${stderrData}`));
-//       }
-//     });
-//
-//     inputStream.pipe(ffmpegProcess.stdin);
-//
-//     inputStream.on('error', (err) => {
-//       console.error('Error in inputStream', err);
-//       ffmpegProcess.stdin.end();
-//       reject(err);
-//     });
-//   });
+//   const emojiRegex =
+//     /^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}]$/u;
+//   return emojiRegex.test(str);
 // }
 
 async function getMessage(key: proto.IMessageKey, full = false) {
@@ -227,8 +229,6 @@ interface IgetBase64FromMediaMessage {
 async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBuffer = false) {
   try {
     const m = data?.message;
-    // const convertToMp4 = data?.convertToMp4 ?? false;
-
     const msg = m?.message ? m : ((await getMessage(m.key, true)) as proto.IWebMessageInfo);
 
     if (!msg) {
@@ -246,10 +246,7 @@ async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBu
       } else if ("viewOnceMessageV2" in mm) {
         msg.message = mm['viewOnceMessageV2']?.message;
       }
-      //   if (msg.message![subtype] && subtype === "ephemeralMessage" || subtype === "documentWithCaptionMessage" || subtype === "viewOnceMessage" || subtype === "viewOnceMessageV2") {
-      //     msg.message = msg.message![subtype]?.message;
-      //   }
-      // }
+
       if ('messageContextInfo' in mm && Object.keys(mm).length === 1) {
         throw 'The message is messageContextInfo';
       }
@@ -260,7 +257,6 @@ async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBu
         width: number;
       }
 
-      let mediaMessage: proto.Message.IImageMessage | proto.Message.IDocumentMessage | proto.Message.IAudioMessage | proto.Message.IVideoMessage | proto.Message.IStickerMessage | undefined = undefined;
       let size: ISize | undefined;
       let mediaType: string = "";
       let caption: string = "";
@@ -290,50 +286,6 @@ async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBu
         buffer: getBuffer ? buffer : null,
       };
     }
-
-
-    // if (typeof mediaMessage['mediaKey'] === 'object') {
-    //   msg.message = JSON.parse(JSON.stringify(msg.message));
-    // }
-
-    // const buffer = await downloadMediaMessage(
-    //   { key: msg?.key, message: msg?.message },
-    //   'buffer',
-    //   {},
-    //   { logger: P({ level: 'error' }) as any, reuploadRequest: this.client.updateMediaMessage },
-    // );
-
-    // const typeMessage = getContentType(msg.message!);
-
-
-    // if (convertToMp4 && typeMessage === 'audioMessage') {
-    //   try {
-    //     const convert = await this.processAudioMp4(buffer.toString('base64'));
-    //
-    //     if (Buffer.isBuffer(convert)) {
-    //       const result = {
-    //         mediaType,
-    //         fileName,
-    //         caption: mediaMessage['caption'],
-    //         size: {
-    //           fileLength: mediaMessage['fileLength'],
-    //           height: mediaMessage['height'],
-    //           width: mediaMessage['width'],
-    //         },
-    //         mimetype: 'audio/mp4',
-    //         base64: convert.toString('base64'),
-    //         buffer: getBuffer ? convert : null,
-    //       };
-    //
-    //       return result;
-    //     }
-    //   } catch (error) {
-    //     this.logger.error('Error converting audio to mp4:');
-    //     this.logger.error(error);
-    //     throw new BadRequestException('Failed to convert audio to MP4');
-    //   }
-    // }
-
   } catch (error) {
     logger.error('Error processing media message:');
     logger.error(error);
