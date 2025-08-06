@@ -77,10 +77,10 @@ export function GetMessage({
     })
     .with({ videoMessage: P.any }, () => {
       if (isNewsLetter) {
-        if (message.imageMessage?.url) {
-          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.imageMessage.url)}`;
+        if (message.videoMessage?.url) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.videoMessage.url)}`;
         } else if (message.imageMessage?.directPath) {
-          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["imageMessage"]?.directPath}`)}`;
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["videoMessage"]?.directPath}`)}`;
         }
       } else {
         mediaUrl = mediaUrl + `${chatId}/${messageId}`;
@@ -97,10 +97,10 @@ export function GetMessage({
     })
     .with({ stickerMessage: P.any }, () => {
       if (isNewsLetter) {
-        if (message.imageMessage?.url) {
-          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.imageMessage.url)}`;
-        } else if (message.imageMessage?.directPath) {
-          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["imageMessage"]?.directPath}`)}`;
+        if (message.stickerMessage?.url) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.stickerMessage.url)}`;
+        } else if (message.stickerMessage?.directPath) {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["stickerMessage"]?.directPath}`)}`;
         }
       } else {
         mediaUrl = mediaUrl + `${chatId}/${messageId}`;
