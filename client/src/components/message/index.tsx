@@ -2,7 +2,7 @@ import { proto } from "baileys";
 import { JSX } from "solid-js/jsx-runtime";
 import { match, P } from "ts-pattern";
 
-const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 /**
  * Function to get the contents of the said message

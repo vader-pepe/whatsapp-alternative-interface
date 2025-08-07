@@ -1,14 +1,12 @@
-import { createSignal, For, type Component } from 'solid-js';
+import { createSignal, createMemo, For, type Component } from 'solid-js';
 import { type BaileysEventMap, type proto } from "baileys";
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { match, P } from "ts-pattern";
 import { ChatWindow } from './components/chat-window';
 
-const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
-const WEBHOOK_URL = import.meta.env.VITE_WEBHOOK_URL;
-const INSTANCE_NAME = import.meta.env.VITE_INSTANCE_NAME;
-const API_KEY = import.meta.env.VITE_API_KEY;
+const API_URL = import.meta.env.VITE_API_URL;
+const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL;
 
 export interface Chat {
   count: number
@@ -50,18 +48,31 @@ const App: Component = () => {
   const [currentChat, setCurrentChat] = createSignal<Chat>();
   const [showChatWindow, setShowChatWindow] = createSignal(false);
   const [chats, setChats] = createSignal<Chat[]>([]);
+  const [search, setSearch] = createSignal("");
 
-  const socket = io(WEBHOOK_URL);
+  const socket = io(WEBSOCKET_URL);
 
   function closeChatWindow() {
     setCurrentChat();
     setShowChatWindow(false);
-  }
+  };
 
   async function openChatWindow(chat: Chat) {
     setCurrentChat(chat);
     setShowChatWindow(true);
-  }
+  };
+
+  const filteredChats = createMemo(() => {
+    const s = search().toLowerCase();
+    if (!s) return chats();
+
+    return chats().filter((c) => {
+      const name = c.name?.toLowerCase() ?? "";
+      const notify = c.notify?.toLowerCase() ?? "";
+      const jid = c.jid?.toLowerCase() ?? "";
+      return name.includes(s) || notify.includes(s) || jid.includes(s);
+    });
+  });
 
   socket.on('connect', async () => {
     console.log('Connected via Socket.IO');
@@ -109,7 +120,7 @@ const App: Component = () => {
     <div class="h-full flex flex-col items-center">
       <div class="fixed w-full h-[65px] z-10 flex justify-center">
         <label class=" my-3 mx-4 inset-0 input input-bordered flex gap-2 max-w-[600px] min-w-[300px]">
-          <input type="text" class="grow" placeholder="Search Contact..." />
+          <input type="text" on:keyup={(e) => { if (e.key === "Escape") setSearch(""); }} on:input={e => setSearch(e.target.value)} class="grow" placeholder="Search Contact..." />
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 16 16"
@@ -126,7 +137,7 @@ const App: Component = () => {
       </div>
 
       <div class="relative mb-32 max-h-screen mx-4 flex flex-col mt-16">
-        <For each={chats()}>
+        <For each={filteredChats()}>
           {(chat) => <button onclick={() =>
             openChatWindow(chat)
           } class="max-w-[600px] min-w-[300px] mb-2 cursor-pointer relative transition duration-150 border text-justify break-words border-gray-700 hover:border-gray-300 px-3 py-2 rounded-sm min-h-[80px] max-h-[80px] overflow-hidden">

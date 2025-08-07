@@ -5,7 +5,7 @@ import axios from "axios";
 import { Chat } from "../../App";
 import { ChatBubbles } from "../chat-bubbles";
 
-const API_URL = import.meta.env.VITE_EVOLUTION_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface PastedImage {
   id: number;
