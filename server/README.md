@@ -125,6 +125,24 @@ curl -X POST http://localhost:3000/send \
     "text": "Hello everyone!",
     "allContacts": "true"
   }'
+
+## 10. Send Text to All Contacts
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "text",
+    "to": "628123456789",
+    "text": "This is a reply message",
+    "quoted": {
+      "key": {
+        "remoteJid": "628123456789@s.whatsapp.net",
+        "fromMe": false,
+        "id": "ABCD123456"
+      }
+    }
+  }'
 ```
 
 ## Fixes in Route
