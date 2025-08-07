@@ -15,7 +15,7 @@ export function ChatBubble({
 }) {
   return (
     <div class="mb-2 w-full">
-      <div class={`break-words text-wrap chat-bubble ${bubbleStyle} `}>
+      <div class={`break-words text-pretty chat-bubble ${bubbleStyle} max-w-[300px]`}>
         {extendedContent ? (
           <div
             class={`"px-2 py-1 ${isFromMe ? "bg-blue-300" : "bg-gray-700"} ${isFromMe ? "text-black" : "text-white"} rounded-t-md flex flex-col text-left`}

@@ -1,4 +1,4 @@
-import { createSignal, createMemo, For, type Component } from 'solid-js';
+import { createSignal, createMemo, For, type Component, onMount, onCleanup } from 'solid-js';
 import { type BaileysEventMap, type proto } from "baileys";
 import { io } from 'socket.io-client';
 import axios from 'axios';
@@ -31,14 +31,9 @@ function GeneratePreviewMessage(msg: proto.IMessage, stub?: string[]) {
     .with({ stickerMessage: P.any }, () => "Sticker")
     .with({ reactionMessage: P.any }, () => "Reaction")
     .with({ editedMessage: P.any }, () => "Edited")
-    .with({ extendedTextMessage: P.any }, () => {
-      const text = msg.extendedTextMessage!.text;
-      if (text) {
-        return text;
-      }
-      return JSON.stringify(msg.extendedTextMessage);
-    })
-    .otherwise(() => JSON.stringify(msg))
+    .with({ protocolMessage: P.any }, () => "Protocol Message")
+    .with({ extendedTextMessage: P.any }, () => "Extended Message")
+    .otherwise(() => "Other")
   return res;
 };
 
@@ -114,6 +109,25 @@ const App: Component = () => {
       });
     }
     console.log('Received message:', webMessage);
+  });
+
+  onMount(() => {
+    history.pushState(null, "", location.href);
+
+    const handlePopstate = (e: PopStateEvent) => {
+      if (showChatWindow()) {
+        setShowChatWindow(false);
+        history.pushState(null, "", location.href);
+      } else {
+        window.history.back();
+      }
+    };
+
+    window.addEventListener("popstate", handlePopstate);
+
+    onCleanup(() => {
+      window.removeEventListener("popstate", handlePopstate);
+    })
   });
 
   return (

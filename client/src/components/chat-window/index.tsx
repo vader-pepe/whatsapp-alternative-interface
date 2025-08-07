@@ -24,7 +24,7 @@ type MessageType =
 
 interface SendRequestBody {
   type: MessageType;
-  to: string;
+  to?: string;
   text?: string;
   caption?: string;
   filename?: string;
@@ -68,9 +68,61 @@ export function ChatWindow({
     setMessages(prev => [...prev, ...webMessage.messages.filter(msg => msg.key.remoteJid === currentChat.jid)])
   });
 
+  // Example usage
+  // const webpFile = await convertToWebP(file);
+  // const webpUrl = URL.createObjectURL(webpFile);
+  async function convertToWebP(file: File): Promise<File> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) return reject("Canvas context not available");
+
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const webpFile = new File([blob], file.name.replace(/\.[^.]+$/, ".webp"), {
+                type: "image/webp",
+                lastModified: Date.now(),
+              });
+              resolve(webpFile);
+            } else {
+              reject("Failed to convert to WebP");
+            }
+          },
+          "image/webp",
+          0.9 // quality
+        );
+      };
+
+      img.onerror = (err) => reject("Image load failed: " + err);
+      img.src = url;
+    });
+  };
+
+  function newAbortSignal(timeoutMs: number) {
+    const abortController = new AbortController();
+    setTimeout(() => {
+      abortController.abort();
+    }, timeoutMs || 0);
+
+    return abortController.signal;
+  };
+
   async function fetchData(newOffset = 0) {
     const m = await axios.get<proto.IWebMessageInfo[]>(
       `${API_URL}/messages/${currentChat!.jid}/50/${newOffset}`,
+      {
+        signal: newAbortSignal(5000)
+      }
     );
     if (m.data) {
       setOffset(newOffset);
@@ -85,7 +137,8 @@ export function ChatWindow({
     const response = await axios.post<SendResponse>(`${API_URL}/send`, payload, {
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      signal: newAbortSignal(5000)
     });
 
     setIsSending(false);
@@ -105,8 +158,9 @@ export function ChatWindow({
       `${API_URL}/send`,
       form,
       {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        signal: newAbortSignal(5000)
+      },
     );
     setIsSending(false);
     return response.data;
@@ -130,6 +184,97 @@ export function ChatWindow({
     }
   };
 
+  async function handleSubmit() {
+    if (currentChat!.jid === "status@broadcast" && images().length > 0) {
+      setIsSending(true);
+      const form = new FormData();
+      form.append('type', 'status');
+      form.append('statusType', 'image');
+      form.append('caption', message());
+      form.append('allContacts', 'true');
+      form.append('file', images()[0].file);
+
+      await axios.post(
+        `${API_URL}/send`,
+        form,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      setIsSending(false);
+      setMessage("");
+      setImages([]);
+      return;
+    } else if (currentChat!.jid === "status@broadcast") {
+      // TODO: remove this duplicate!
+      setIsSending(true);
+      await axios.post(
+        `${API_URL}/send`,
+        // '{"type": "status","statusType": "text","text": "Good evening, friends!","backgroundColor": "#DDDDDD","font": 2,"allContacts": "true"}',
+        {
+          'type': 'status',
+          'statusType': 'text',
+          'text': message(),
+          'backgroundColor': '#DDDDDD',
+          'font': 2,
+          'allContacts': 'true'
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+
+      setIsSending(false);
+      setMessage("");
+      setImages([]);
+      return;
+    }
+
+    if (message().startsWith("sticker:") && images().length > 0) {
+      const webpFile = await convertToWebP(images()[0].file);
+      await sendMedia({
+        type: "sticker",
+        to: currentChat!.jid,
+        caption: "",
+        file: webpFile,
+      });
+
+      setIsSending(false);
+      setMessage("");
+      setImages([]);
+      return;
+    }
+
+    if (images().length > 0) {
+      await sendMedia({
+        type: "image",
+        to: currentChat!.jid,
+        caption: message(),
+        file: images()[0].file
+      });
+    } else {
+      await sendMessage({
+        type: "text",
+        to: currentChat!.jid,
+        text: message()
+      });
+    }
+
+    setIsSending(false);
+    setMessage("");
+    setImages([]);
+  };
+
+  const handleKeyDown: JSX.EventHandlerUnion<HTMLTextAreaElement, KeyboardEvent> = async (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      await handleSubmit();
+    }
+  };
+
   const handleFileSelect = (file: File) => {
     const src = URL.createObjectURL(file);
     setImages(prev => [...prev, { id: nextId++, src, file }]);
@@ -149,7 +294,7 @@ export function ChatWindow({
   });
 
   return (
-    <div class="flex flex-col h-screen fixed inset-0 backdrop-blur-md z-10 px-3 py-4">
+    <div class="flex flex-col fixed inset-0 backdrop-blur-md z-10 px-3 py-4 max-h-[100dvh]">
       <div class="flex gap-4">
         <button onclick={() => closeChatWindow()}>
           <svg
@@ -167,7 +312,7 @@ export function ChatWindow({
 
       <div
         ref={(el) => (container = el)}
-        class="mt-2 max-w-full h-full py-3 px-2 border border-gray-700 rounded-md overflow-y-scroll overflow-x-hidden"
+        class="flex-1 overflow-y-auto mt-2 py-3 px-2 border border-gray-700 rounded-md"
       >
         <div class="w-full flex justify-center items-center">
           <button
@@ -187,26 +332,8 @@ export function ChatWindow({
       <form
         class="w-full mt-2"
         onsubmit={async (e) => {
-          let response: SendResponse;
           e.preventDefault();
-          if (images().length > 0) {
-            response = await sendMedia({
-              type: "image",
-              to: currentChat.jid,
-              caption: message(),
-              file: images()[0].file
-            });
-          } else {
-            response = await sendMessage({
-              type: "text",
-              to: currentChat.jid,
-              text: message()
-            });
-
-          }
-
-          setMessage("");
-          setImages([]);
+          await handleSubmit();
         }}
       >
         <div class="pasted-images flex gap-2">
@@ -222,7 +349,7 @@ export function ChatWindow({
           </For>
         </div>
 
-        <div class="flex z-10 relative">
+        <div class="flex gap-2 z-10 relative">
           <textarea
             rows={2}
             cols={40}
@@ -230,6 +357,7 @@ export function ChatWindow({
             ref={(el) => (inputElement = el)}
             oninput={(e) => setMessage(e.target.value)}
             value={message()}
+            on:keydown={handleKeyDown}
             disabled={isSending()}
             placeholder={images().length > 0 ? undefined : "Type a message"}
             class="textarea textarea-bordered flex-1"
