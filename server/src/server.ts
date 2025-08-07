@@ -316,9 +316,9 @@ async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBu
         msg.message = mm['viewOnceMessageV2']?.message;
       }
 
-      if ('messageContextInfo' in mm && Object.keys(mm).length === 1) {
-        throw 'The message is messageContextInfo';
-      }
+      // if ('messageContextInfo' in mm && Object.keys(mm).length === 1) {
+      //   throw 'The message is messageContextInfo';
+      // }
 
       interface ISize {
         fileLength: number | Long;

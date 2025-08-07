@@ -14,16 +14,20 @@ export function ChatBubble({
   isFromMe: boolean;
 }) {
   return (
-    <div class={`break-words text-wrap chat-bubble ${bubbleStyle}`}>
-      {extendedContent ? (
-        <div
-          class={`"px-2 py-1 ${isFromMe ? "bg-blue-300" : "bg-gray-700"} ${isFromMe ? "text-black" : "text-white"} rounded-t-md flex flex-col text-left`}
-        >
-          {participant ? <small>{participant}</small> : null}
-          {extendedContent}
-        </div>
-      ) : null}
-      {mainContent}
+    <div class="mb-2 w-full">
+      <div class={`break-words text-wrap chat-bubble ${bubbleStyle} `}>
+        {extendedContent ? (
+          <div
+            class={`"px-2 py-1 ${isFromMe ? "bg-blue-300" : "bg-gray-700"} ${isFromMe ? "text-black" : "text-white"} rounded-t-md flex flex-col text-left`}
+          >
+            {participant ? <small>{participant}</small> : null}
+            {extendedContent}
+          </div>
+        ) : null}
+        {mainContent}
+      </div>
+      {/* TODO: handle reaction */}
+      <small role="link" class="text-cyan-300 cursor-pointer">Reply</small>
     </div>
   );
 }
