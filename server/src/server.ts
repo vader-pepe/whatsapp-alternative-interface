@@ -157,7 +157,7 @@ export type MessageType =
 export type StatusType = 'text' | 'image' | 'video' | 'audio';
 
 export interface SendRequestBody {
-  to?: string;
+  to: string;
   type: MessageType;
   text?: string;
   caption?: string;
@@ -169,6 +169,7 @@ export interface SendRequestBody {
   font?: string;                // parse to number later
   allContacts?: 'true' | 'false';
   statusJidList?: string[];
+  quote?: Partial<proto.IWebMessageInfo>;
 }
 
 app.post(
@@ -187,6 +188,7 @@ app.post(
       font,
       allContacts,
       statusJidList,
+      quote,
     } = req.body;
 
     const useAll = allContacts === 'true';
@@ -201,6 +203,17 @@ app.post(
       : useAll
         ? getAllContactJids()
         : [baseJid];
+
+    let quoted: proto.IWebMessageInfo;
+    if (quote) {
+      quoted = {
+        key: {
+          id: quote.key?.id ?? "",
+          remoteJid: to.includes('@') ? to : `${to}@s.whatsapp.net`,
+          fromMe: false, // Adjust depending on use case
+        }
+      };
+    }
 
     try {
       if (type === 'status') {
@@ -250,7 +263,11 @@ app.post(
       }
 
       for (const jid of targets) {
-        await sendMessageWTyping(message, jid);
+        if (quote) {
+          await sendMessageWTyping(message, jid, { quoted: quoted! });
+        } else {
+          await sendMessageWTyping(message, jid);
+        }
       }
       if (req.file) fs.unlink(req.file.path, () => { });
       return res.json({ success: true, type, to: targets });
