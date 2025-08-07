@@ -125,6 +125,7 @@ curl -X POST http://localhost:3000/send \
     "text": "Hello everyone!",
     "allContacts": "true"
   }'
+```
 
 ## 10. Send Text to All Contacts
 
