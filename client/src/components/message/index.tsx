@@ -127,13 +127,13 @@ export function GetMessage({
       }
       return JSON.stringify(message.extendedTextMessage);
     })
-    // .with({ protocolMessage: P.any }, () => {
-    //   const edited = message.protocolMessage!.editedMessage;
-    //   if (!edited) {
-    //     return JSON.stringify(message.protocolMessage);
-    //   }
-    //   return GetMessage({ messageInfo: message.protocolMessage!, extra: { jid: chatId, messageId } });
-    // })
+    .with({ protocolMessage: P.any }, () => {
+      const edited = message.protocolMessage!.editedMessage;
+      if (!edited) {
+        return JSON.stringify(message.protocolMessage);
+      }
+      return GetMessage({ messageInfo: message.protocolMessage!, jid: chatId });
+    })
     // .with({ associatedChildMessage: P.any }, () => GetMessage({ messageInfo: message.associatedChildMessage!, extra: { jid: chatId, messageId } }))
     // TODO: handle documents
     .with({ documentMessage: P.any }, () => "Document")

@@ -19,7 +19,8 @@ export function ChatBubbles({
 
   const setContextAndParticipant = (context: proto.IContextInfo) => {
     extendedContent = GetMessage({ messageInfo: context, jid: id });
-    participant = context.remoteJid;
+    // TODO: WA sialan ini ilang lagi
+    participant = null;
   };
 
   if (message && msgType !== null) {
