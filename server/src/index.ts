@@ -62,6 +62,14 @@ db.exec(`
 CREATE INDEX IF NOT EXISTS idx_messages_jid_timestamp ON messages(jid, timestamp)
 `);
 
+db.exec(`CREATE TABLE IF NOT EXISTS tokens (
+  id INTEGER PRIMARY KEY,
+  access_token TEXT NOT NULL,
+  token_type TEXT NOT NULL,
+  expires_in INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)`);
+
 const upsertContact = db.prepare(`
   INSERT INTO contacts (jid, name, notify, imgUrl, status)
   VALUES (?, ?, ?, ?, ?)
@@ -184,6 +192,36 @@ async function useSqliteAuthState(): Promise<{
   return { state, saveCreds }
 }
 
+interface TokenRow {
+  access_token: string;
+  updated_at: number;
+  token_type: string;
+  expires_in: number;
+};
+
+function spotifyUtils() {
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    getCachedToken() {
+      const row = db.prepare('SELECT access_token, expires_in, token_type, updated_at FROM tokens WHERE id = 1').get() as TokenRow;
+
+      if (row && now - row.updated_at < 3600) {
+        return row;
+      }
+    },
+    setToken(token: TokenRow) {
+      db.prepare(`INSERT INTO tokens (id, access_token, expires_in, token_type, updated_at)
+              VALUES (1, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+              access_token = excluded.access_token,
+              expires_in = excluded.expires_in,
+              token_type = excluded.token_type,
+              updated_at = excluded.updated_at`)
+        .run(token.access_token, token.expires_in, token.token_type, token.updated_at);
+    }
+  }
+};
+
 function makeSqliteMessageStore() {
   const insertStmt = db.prepare('INSERT OR REPLACE INTO messages (id, jid, timestamp, message) VALUES (?, ?, ?, ?)')
   const selectPaginatedStmt = db.prepare('SELECT message FROM messages WHERE jid = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?')
@@ -273,6 +311,7 @@ function makeSqliteMessageStore() {
 }
 
 export const store = makeSqliteMessageStore();
+export const spotify = spotifyUtils();
 const groupCache = new NodeCache({
   stdTTL: 300,
   useClones: false

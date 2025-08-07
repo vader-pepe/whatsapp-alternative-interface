@@ -4,7 +4,7 @@ import helmet from "helmet";
 import { pino } from "pino";
 import { v4 } from "uuid";
 import { type proto, AnyMessageContent, downloadMediaMessage } from "baileys";
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -16,6 +16,8 @@ import errorHandler from "@/common/middleware/errorHandler";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { store, sock, sendMessageWTyping } from ".";
+import { generateNowPlayingCode, getNowPlayingUri } from "./spotify";
+import { IncomingMessage } from "http";
 
 const upload = multer({ dest: path.resolve('app-data/uploads/') });
 
@@ -279,6 +281,15 @@ app.post(
   }
 );
 
+app.get("/nowplaying", async function(req, res) {
+  const uri = await getNowPlayingUri();
+  const encodedUri = encodeURIComponent(uri);
+  const url = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
+  const response: AxiosResponse<IncomingMessage> = await axios.get(url, { responseType: 'stream' });
+  res.setHeader('Content-Type', 'image/png');
+  response.data.pipe(res);
+});
+
 async function getMessage(key: proto.IMessageKey, full = false) {
   try {
     const webMessageInfo = store.getAllMessages(key.remoteJid!);
@@ -305,7 +316,7 @@ async function getMessage(key: proto.IMessageKey, full = false) {
   } catch (error) {
     return { conversation: '' };
   }
-}
+};
 
 interface IgetBase64FromMediaMessage {
   message: proto.IWebMessageInfo;
@@ -377,7 +388,7 @@ async function getBase64FromMediaMessage(data: IgetBase64FromMediaMessage, getBu
     logger.error(error);
     throw new Error("Error processing media message:");
   }
-}
+};
 
 // Swagger UI
 app.use(openAPIRouter);

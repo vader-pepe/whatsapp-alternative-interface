@@ -15,6 +15,12 @@ const envSchema = z.object({
   COMMON_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(1000),
 
   COMMON_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(1000),
+
+  SPOTIFY_CLIENT_ID: z.string(),
+
+  SPOTIFY_CLIENT_SECRET: z.string(),
+
+  SPOTIFY_REFRESH_TOKEN: z.string(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
