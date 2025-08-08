@@ -254,8 +254,7 @@ app.post(
       }
 
       for (const jid of targets) {
-        if (quote) {
-          logger.info({ quote: JSON.parse(JSON.parse(quote)) });
+        if (quote && quote !== "undefined") {
           await sendMessageWTyping(message, jid, { quoted: JSON.parse(JSON.parse(quote)) as proto.IWebMessageInfo });
         } else {
           await sendMessageWTyping(message, jid);
