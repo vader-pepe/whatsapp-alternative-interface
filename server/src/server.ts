@@ -16,7 +16,7 @@ import errorHandler from "@/common/middleware/errorHandler";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { store, sock, sendMessageWTyping } from ".";
-import { generateNowPlayingCode, getNowPlayingUri } from "./spotify";
+import { getNowPlayingUri } from "./spotify";
 import { IncomingMessage } from "http";
 
 const upload = multer({ dest: path.resolve('app-data/uploads/') });
@@ -141,11 +141,11 @@ async function formatStatusMessage(params: {
     default:
       throw new Error(`Unsupported status type ${params.type}`)
   }
-}
+};
 
 function getAllContactJids() {
   return store.getAllChats().map(c => c.jid).filter(jid => jid.endsWith('@s.whatsapp.net'));
-}
+};
 
 export type MessageType =
   | 'text'
@@ -171,8 +171,8 @@ export interface SendRequestBody {
   font?: string;                // parse to number later
   allContacts?: 'true' | 'false';
   statusJidList?: string[];
-  quote?: Partial<proto.IWebMessageInfo>;
-}
+  quote?: string;
+};
 
 app.post(
   '/send',
@@ -205,17 +205,6 @@ app.post(
       : useAll
         ? getAllContactJids()
         : [baseJid];
-
-    let quoted: proto.IWebMessageInfo;
-    if (quote) {
-      quoted = {
-        key: {
-          id: quote.key?.id ?? "",
-          remoteJid: to.includes('@') ? to : `${to}@s.whatsapp.net`,
-          fromMe: false, // Adjust depending on use case
-        }
-      };
-    }
 
     try {
       if (type === 'status') {
@@ -266,7 +255,8 @@ app.post(
 
       for (const jid of targets) {
         if (quote) {
-          await sendMessageWTyping(message, jid, { quoted: quoted! });
+          logger.info({ quote: JSON.parse(JSON.parse(quote)) });
+          await sendMessageWTyping(message, jid, { quoted: JSON.parse(JSON.parse(quote)) as proto.IWebMessageInfo });
         } else {
           await sendMessageWTyping(message, jid);
         }

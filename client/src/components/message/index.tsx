@@ -58,7 +58,7 @@ export function GetMessage({
       if (isNewsLetter) {
         if (message.imageMessage?.url) {
           mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.imageMessage.url)}`;
-        } else if (message.imageMessage?.directPath) {
+        } else {
           mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["imageMessage"]?.directPath}`)}`;
         }
       } else {
@@ -79,8 +79,8 @@ export function GetMessage({
       if (isNewsLetter) {
         if (message.videoMessage?.url) {
           mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(message.videoMessage.url)}`;
-        } else if (message.imageMessage?.directPath) {
-          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["videoMessage"]?.directPath}`)}`;
+        } else {
+          mediaUrl = `${API_URL}/mediaproxy/${encodeURIComponent(`https://mmg.whatsapp.net${message!["videoMessage"]!.directPath}`)}`;
         }
       } else {
         mediaUrl = mediaUrl + `${chatId}/${messageId}`;

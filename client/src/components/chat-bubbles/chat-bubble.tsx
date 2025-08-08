@@ -26,8 +26,6 @@ export function ChatBubble({
         ) : null}
         {mainContent}
       </div>
-      {/* TODO: handle reaction */}
-      <small role="link" class="text-cyan-300 cursor-pointer">Reply</small>
     </div>
   );
 }

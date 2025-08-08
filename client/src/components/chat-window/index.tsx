@@ -34,6 +34,7 @@ interface SendRequestBody {
   font?: number;
   allContacts?: boolean;
   statusJidList?: string[];
+  quote?: proto.IWebMessageInfo | string;
 };
 
 type SendResponse = {
@@ -58,6 +59,7 @@ export function ChatWindow({
   const [offset, setOffset] = createSignal(0);
   const [images, setImages] = createSignal<PastedImage[]>([]);
   const [isSending, setIsSending] = createSignal(false);
+  const [replyingTo, setReplyingTo] = createSignal<proto.IWebMessageInfo>();
 
   let container: HTMLElement | null = null;
   let inputElement: HTMLElement | null = null;
@@ -185,6 +187,13 @@ export function ChatWindow({
   };
 
   async function handleSubmit() {
+    let quote: proto.IWebMessageInfo;
+
+    if (replyingTo()) {
+      quote = { ...replyingTo()! };
+    }
+
+    // TODO: sending image can be more than 1 you moron
     if (currentChat!.jid === "status@broadcast" && images().length > 0) {
       setIsSending(true);
       const form = new FormData();
@@ -240,6 +249,7 @@ export function ChatWindow({
         to: currentChat!.jid,
         caption: "",
         file: webpFile,
+        quote: JSON.stringify(quote!)
       });
 
       setIsSending(false);
@@ -253,13 +263,15 @@ export function ChatWindow({
         type: "image",
         to: currentChat!.jid,
         caption: message(),
-        file: images()[0].file
+        file: images()[0].file,
+        quote: quote!
       });
     } else {
       await sendMessage({
         type: "text",
         to: currentChat!.jid,
-        text: message()
+        text: message(),
+        quote: quote!
       });
     }
 
@@ -325,7 +337,7 @@ export function ChatWindow({
           </button>
         </div>
         <For each={messages()} fallback={<span class="loading loading-spinner loading-md block"></span>}>
-          {(message) => <ChatBubbles id={currentChat.jid} messageInfo={message} />}
+          {(message) => <><ChatBubbles id={currentChat.jid} messageInfo={message} /><small on:click={() => setReplyingTo(message)} role="link" class="mt-[-200px] text-cyan-300 cursor-pointer">Reply</small></>}
         </For>
       </div>
 
@@ -349,7 +361,16 @@ export function ChatWindow({
           </For>
         </div>
 
-        <div class="flex gap-2 z-10 relative">
+        <div class="flex gap-2 relative">
+          {replyingTo() ? <>
+            <div class="absolute bottom-22 left-10">
+              <div class="bg-blue-300 text-black z-10 min-w-[100px] max-w-full">{JSON.stringify(replyingTo()?.message) ?? "unimplemented"}</div>
+            </div>
+            <small on:click={() => setReplyingTo()} class="z-10 bottom-21 absolute w-[32px] left-0 cursor-pointer" role="button">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M9.70711 8.29289C9.31658 7.90237 8.68342 7.90237 8.29289 8.29289C7.90237 8.68342 7.90237 9.31658 8.29289 9.70711L10.5858 12L8.29289 14.2929C7.90237 14.6834 7.90237 15.3166 8.29289 15.7071C8.68342 16.0976 9.31658 16.0976 9.70711 15.7071L12 13.4142L14.2929 15.7071C14.6834 16.0976 15.3166 16.0976 15.7071 15.7071C16.0976 15.3166 16.0976 14.6834 15.7071 14.2929L13.4142 12L15.7071 9.70711C16.0976 9.31658 16.0976 8.68342 15.7071 8.29289C15.3166 7.90237 14.6834 7.90237 14.2929 8.29289L12 10.5858L9.70711 8.29289Z" fill="#ffffff"></path> <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM4 12C4 7.58172 7.58172 4 12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12Z" fill="#ffffff"></path> </g></svg>
+            </small>
+          </> : null}
+
           <textarea
             rows={2}
             cols={40}

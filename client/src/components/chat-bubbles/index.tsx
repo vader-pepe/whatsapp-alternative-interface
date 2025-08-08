@@ -7,7 +7,7 @@ import { GetMessage } from "../message";
 
 export function ChatBubbles({
   messageInfo,
-  id
+  id,
 }: {
   messageInfo: proto.IWebMessageInfo;
   id?: string;
