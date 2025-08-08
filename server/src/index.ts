@@ -1,5 +1,6 @@
 import { env } from "@/common/utils/envConfig";
-import { app, logger } from "@/server";
+import { app, formatStatusMessage, logger } from "@/server";
+import { getNowPlaying, pollNowPlaying } from "@/spotify";
 
 import { Boom } from '@hapi/boom'
 import { Server, type Socket } from "socket.io";
@@ -28,6 +29,8 @@ import makeWASocket, {
 } from 'baileys';
 import fs from 'fs'
 import Database from "better-sqlite3";
+import axios, { AxiosResponse } from "axios";
+import { IncomingMessage } from "http";
 
 const db = new Database(path.resolve("app-data/store.db"));
 db.exec(`
@@ -673,6 +676,44 @@ io.on('connection', (socket: Socket) => {
     }
   });
 });
+
+interface FileLike {
+  buffer: Buffer;
+  filename: string;
+  mimetype: string;
+};
+
+setInterval(async () => {
+  await pollNowPlaying(async () => {
+    const uri = (await getNowPlaying()).item.uri;
+    const encodedUri = encodeURIComponent(uri);
+    const url = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
+    const response: AxiosResponse<IncomingMessage> = await axios.get(url, { responseType: 'stream' });
+    const chunks: Buffer[] = [];
+    const fileLike = async () => {
+      return new Promise<FileLike>((resolve, reject) => {
+        response.data.on('data', chunk => chunks.push(chunk));
+        response.data.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve({
+            buffer,
+            filename: 'spotify-code.png',
+            mimetype: 'image/png',
+          });
+        });
+        response.data.on('error', err => reject(err));
+      });
+    };
+    // const { content: statusContent, options: statusOptions } = await formatStatusMessage({
+    //   type: 'image',
+    //   content: (await fileLike()).filename,
+    //   caption,
+    //   backgroundColor,
+    //   font: fontNum,
+    //   statusJidList: list ?? [],
+    // });
+  });
+}, 30_000);
 
 const onCloseSignal = () => {
   logger.info("sigint received, shutting down");

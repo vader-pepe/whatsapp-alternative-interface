@@ -16,7 +16,7 @@ import errorHandler from "@/common/middleware/errorHandler";
 import requestLogger from "@/common/middleware/requestLogger";
 import { env } from "@/common/utils/envConfig";
 import { store, sock, sendMessageWTyping } from ".";
-import { getNowPlayingUri } from "./spotify";
+import { getNowPlaying } from "./spotify";
 import { IncomingMessage } from "http";
 
 const upload = multer({ dest: path.resolve('app-data/uploads/') });
@@ -96,7 +96,7 @@ app.get("/mediaproxy/:url", async function(req, res) {
   return response.data.pipe(res);
 });
 
-async function formatStatusMessage(params: {
+export async function formatStatusMessage(params: {
   type: 'text' | 'image' | 'video' | 'audio'
   content: string        // either a path or base64/text
   caption?: string
@@ -271,7 +271,7 @@ app.post(
 );
 
 app.get("/nowplaying", async function(req, res) {
-  const uri = await getNowPlayingUri();
+  const uri = (await getNowPlaying()).item.uri;
   const encodedUri = encodeURIComponent(uri);
   const url = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
   const response: AxiosResponse<IncomingMessage> = await axios.get(url, { responseType: 'stream' });
