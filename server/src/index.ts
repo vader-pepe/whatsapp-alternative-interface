@@ -1,6 +1,6 @@
 import { env } from "@/common/utils/envConfig";
-import { app, formatStatusMessage, logger } from "@/server";
-import { getNowPlaying, pollNowPlaying } from "@/spotify";
+import { app, logger } from "@/server";
+import { getNowPlaying } from "@/spotify";
 
 import { Boom } from '@hapi/boom'
 import { Server, type Socket } from "socket.io";
@@ -30,7 +30,6 @@ import makeWASocket, {
 import fs from 'fs'
 import Database from "better-sqlite3";
 import axios, { AxiosResponse } from "axios";
-import { IncomingMessage } from "http";
 
 const db = new Database(path.resolve("app-data/store.db"));
 db.exec(`
@@ -126,16 +125,6 @@ interface AuthKeyRow {
   id: string;        // key identifier
   data: string;      // JSON text (serialized)
 }
-
-export function getMimeType(type: string): string {
-  switch (type) {
-    case 'imageMessage': return 'image/jpeg'
-    case 'videoMessage': return 'video/mp4'
-    case 'audioMessage': return 'audio/ogg'
-    case 'documentMessage': return 'application/pdf'
-    default: return 'application/octet-stream'
-  }
-};
 
 async function useSqliteAuthState(): Promise<{
   state: AuthenticationState
@@ -677,42 +666,41 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-interface FileLike {
-  buffer: Buffer;
-  filename: string;
-  mimetype: string;
-};
-
+let lastUri: string | null = null;
 setInterval(async () => {
-  await pollNowPlaying(async () => {
-    const uri = (await getNowPlaying()).item.uri;
-    const encodedUri = encodeURIComponent(uri);
-    const url = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
-    const response: AxiosResponse<IncomingMessage> = await axios.get(url, { responseType: 'stream' });
-    const chunks: Buffer[] = [];
-    const fileLike = async () => {
-      return new Promise<FileLike>((resolve, reject) => {
-        response.data.on('data', chunk => chunks.push(chunk));
-        response.data.on('end', () => {
-          const buffer = Buffer.concat(chunks);
-          resolve({
-            buffer,
-            filename: 'spotify-code.png',
-            mimetype: 'image/png',
-          });
+  const pollNowPlaying = async () => {
+    const data = (await getNowPlaying());
+    if (data.is_playing) {
+      const uri = data.item.uri;
+      const remaining = data.item.duration_ms ?? 0 - (data.progress_ms ?? 0);
+      if (uri !== lastUri) {
+        lastUri = uri;
+        const encodedUri = encodeURIComponent(uri);
+        const url = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
+        const response: AxiosResponse<ArrayBuffer> = await axios.get(url, { responseType: 'arraybuffer' });
+        const image = new Uint8Array(response.data);
+        const blobData = new Blob([image]);
+
+        const form = new FormData();
+        form.append('type', 'status');
+        form.append('statusType', 'image');
+        form.append('caption', 'now playing');
+        form.append('allContacts', 'true');
+        form.append('file', blobData);
+
+        await axios.post(`http://${env.HOST}:${env.PORT}/send`, form, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }).catch(e => {
+          logger.error(e);
         });
-        response.data.on('error', err => reject(err));
-      });
-    };
-    // const { content: statusContent, options: statusOptions } = await formatStatusMessage({
-    //   type: 'image',
-    //   content: (await fileLike()).filename,
-    //   caption,
-    //   backgroundColor,
-    //   font: fontNum,
-    //   statusJidList: list ?? [],
-    // });
-  });
+      }
+      setTimeout(pollNowPlaying, remaining + 1000);
+    } else {
+      setTimeout(pollNowPlaying, 30_000);
+    }
+  };
 }, 30_000);
 
 const onCloseSignal = () => {

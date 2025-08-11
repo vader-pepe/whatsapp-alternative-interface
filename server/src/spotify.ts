@@ -8,7 +8,7 @@ interface Player {
   shuffle_state: boolean;
   context: Context;
   timestamp: number;
-  progress_ms: number;
+  progress_ms?: number;
   is_playing: boolean;
   item: Item;
   currently_playing_type: string;
@@ -55,7 +55,7 @@ interface Item {
   artists: Artist[];
   available_markets: string[];
   disc_number: number;
-  duration_ms: number;
+  duration_ms?: number;
   explicit: boolean;
   external_ids: ExternalIDS;
   external_urls: ExternalUrls;
@@ -163,16 +163,4 @@ async function getAccessToken(): Promise<Response> {
 
   spotify.setToken({ ...response.data, updated_at: now });
   return response.data;
-};
-
-export async function pollNowPlaying(handleTrack: () => Promise<void>) {
-  const data = await getNowPlaying();
-  if (data.is_playing) {
-    const remaining = data.item.duration_ms - data.progress_ms;
-    // handleTrack(data.item); // your handler
-    await handleTrack();
-    setTimeout(pollNowPlaying, remaining + 1000);
-  } else {
-    setTimeout(pollNowPlaying, 30000);
-  }
 };
