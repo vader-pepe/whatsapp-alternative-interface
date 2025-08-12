@@ -666,42 +666,137 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-let lastUri: string | null = null;
-setInterval(async () => {
-  const pollNowPlaying = async () => {
-    const data = (await getNowPlaying());
-    if (data.is_playing) {
-      const uri = data.item.uri;
-      const remaining = data.item.duration_ms ?? 0 - (data.progress_ms ?? 0);
-      if (uri !== lastUri) {
-        lastUri = uri;
-        const encodedUri = encodeURIComponent(uri);
-        const url = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
-        const response: AxiosResponse<ArrayBuffer> = await axios.get(url, { responseType: 'arraybuffer' });
-        const image = new Uint8Array(response.data);
-        const blobData = new Blob([image]);
+let lastPostedUri: string | null = null;       // uri we successfully posted last
+let currentPlayingUri: string | null = null;    // uri we're actively watching every 1s
+let watcherInterval: NodeJS.Timeout | null = null;
+let posting = false;                            // is a POST currently in-flight?
+let pendingUri: string | null = null;           // latest uri that arrived while posting
 
-        const form = new FormData();
-        form.append('type', 'status');
-        form.append('statusType', 'image');
-        form.append('caption', 'now playing');
-        form.append('allContacts', 'true');
-        form.append('file', blobData);
+// Helper to obtain form headers if running with the `form-data` package in Node.
+function getFormHeaders(form: any): Record<string, string> {
+  if (typeof form?.getHeaders === 'function') return form.getHeaders();
+  return {};
+}
 
-        await axios.post(`http://${env.HOST}:${env.PORT}/send`, form, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }).catch(e => {
-          logger.error(e);
-        });
-      }
-      setTimeout(pollNowPlaying, remaining + 1000);
-    } else {
-      setTimeout(pollNowPlaying, 30_000);
+async function doPostIfStillPlaying(uri: string) {
+  try {
+    // Re-check the playback state right before we do network work.
+    const now = await getNowPlaying();
+    if (!now?.is_playing || now.item?.uri !== uri) {
+      // Track stopped/changed — don't post stale image
+      return;
     }
-  };
-}, 30_000);
+
+    const encodedUri = encodeURIComponent(uri);
+    const artUrl = `https://scannables.scdn.co/uri/plain/jpeg/000000/white/640/${encodedUri}`;
+    const response: AxiosResponse<ArrayBuffer> = await axios.get(artUrl, { responseType: 'arraybuffer' });
+
+    // Convert to Buffer for Node; if you run in the browser you might prefer Blob/`new Uint8Array`.
+    const buffer = Buffer.from(response.data);
+    const blob = new Blob([buffer]);
+
+    // Build multipart form. If you use `form-data` (Node), it exposes `getHeaders()`; browser FormData will be handled
+    // by axios automatically if we don't override headers.
+    const form = new FormData();
+    form.append('type', 'status');
+    form.append('statusType', 'image');
+    form.append('caption', 'now playing');
+    form.append('allContacts', 'true');
+    form.append('file', blob);
+
+    const headers = getFormHeaders(form);
+    await axios.post(`http://debian:8001/send`, form, { headers });
+
+    // Mark success
+    lastPostedUri = uri;
+  } catch (err) {
+    logger.error({ error: err }, 'doPostIfStillPlaying error');
+  }
+}
+
+async function enqueuePost(uri: string) {
+  // If we are currently posting, keep only the latest pending URI.
+  if (posting) {
+    pendingUri = uri;
+    return;
+  }
+
+  posting = true;
+  try {
+    await doPostIfStillPlaying(uri);
+  } finally {
+    posting = false;
+    // If a newer URI arrived while we were posting, schedule it next (small delay to avoid micro-burst).
+    if (pendingUri && pendingUri !== lastPostedUri) {
+      const next = pendingUri;
+      pendingUri = null;
+      setTimeout(() => enqueuePost(next), 250);
+    } else {
+      // clear stale pending
+      pendingUri = null;
+    }
+  }
+}
+
+function startWatcher(uri: string) {
+  // If we are already watching the same uri, do nothing
+  if (watcherInterval && currentPlayingUri === uri) return;
+
+  // Clear any previous watcher
+  if (watcherInterval) {
+    clearInterval(watcherInterval);
+    watcherInterval = null;
+  }
+
+  currentPlayingUri = uri;
+  watcherInterval = setInterval(async () => {
+    try {
+      const now = await getNowPlaying();
+      // Stop watching if playback stopped or track changed
+      if (!now?.is_playing || now.item?.uri !== uri) {
+        if (watcherInterval) {
+          clearInterval(watcherInterval);
+          watcherInterval = null;
+        }
+        currentPlayingUri = null;
+      }
+    } catch (err) {
+      logger.error('watcher error', err);
+      // Keep trying; transient errors shouldn't break the watcher
+    }
+  }, 1000);
+}
+
+async function pollNowPlaying() {
+  try {
+    const data = await getNowPlaying();
+
+    if (data?.is_playing && data.item) {
+      const uri = data.item.uri;
+
+      // If new and not already posted/pending, enqueue a post
+      if (uri !== lastPostedUri && uri !== pendingUri) {
+        await enqueuePost(uri);
+      }
+
+      // Start (or refresh) the 1s watcher for this track
+      startWatcher(uri);
+    } else {
+      // Not playing: clear watcher and pending state
+      if (watcherInterval) {
+        clearInterval(watcherInterval);
+        watcherInterval = null;
+      }
+      currentPlayingUri = null;
+      pendingUri = null;
+    }
+  } catch (err) {
+    logger.error('pollNowPlayingMain error', err);
+  }
+};
+
+// Main loop: check every 30 seconds for new songs
+setInterval(pollNowPlaying, 30_000);
 
 const onCloseSignal = () => {
   logger.info("sigint received, shutting down");
