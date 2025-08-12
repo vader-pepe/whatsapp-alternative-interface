@@ -705,7 +705,7 @@ async function doPostIfStillPlaying(uri: string) {
     form.append('file', blob);
 
     const headers = getFormHeaders(form);
-    await axios.post(`http://debian:8001/send`, form, { headers });
+    await axios.post(`http://${env.HOST}:${env.PORT}/send`, form, { headers });
 
     // Mark success
     lastPostedUri = uri;
