@@ -6,7 +6,7 @@ services:
         env_file:
             - server/.env
         volumes:
-            - ./app-data/:/app/app-data
+            - ./server/app-data/:/app/app-data
         ports:
             - "${SERVER_PORT}:8001"
         build:
