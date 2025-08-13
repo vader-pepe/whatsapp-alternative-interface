@@ -10,8 +10,8 @@ services:
         ports:
             - "${SERVER_PORT}:8001"
         build:
-        context: ./server
-        dockerfile: Dockerfile
+            context: ./server
+            dockerfile: Dockerfile
     whatsapp-client:
         container_name: whatsapp-client
         env_file:
@@ -19,5 +19,5 @@ services:
         ports:
             - "${CLIENT_PORT}:80"
         build:
-        context: ./client
-        dockerfile: Dockerfile
+            context: ./client
+            dockerfile: Dockerfile
