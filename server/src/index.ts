@@ -599,6 +599,8 @@ const startSock = async () => {
       if (events['contacts.update']) {
         logger.info({ contacts: events['contacts.update'] }, 'recv contacts update: ');
         for (const contact of events['contacts.update']) {
+          if (isHistorySyncRunning) return
+          upsertContact.run(contact.id, contact.name ?? null, contact.notify ?? null, contact.imgUrl ?? null, contact.status ?? null);
           if (typeof contact.imgUrl !== 'undefined') {
             const newUrl = contact.imgUrl === null
               ? null
