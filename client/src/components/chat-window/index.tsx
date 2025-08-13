@@ -43,6 +43,55 @@ type SendResponse = {
   to: string | string[];
 };
 
+// Example usage
+// const webpFile = await convertToWebP(file);
+// const webpUrl = URL.createObjectURL(webpFile);
+async function convertToWebP(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) return reject("Canvas context not available");
+
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const webpFile = new File([blob], file.name.replace(/\.[^.]+$/, ".webp"), {
+              type: "image/webp",
+              lastModified: Date.now(),
+            });
+            resolve(webpFile);
+          } else {
+            reject("Failed to convert to WebP");
+          }
+        },
+        "image/webp",
+        0.9 // quality
+      );
+    };
+
+    img.onerror = (err) => reject("Image load failed: " + err);
+    img.src = url;
+  });
+};
+
+function newAbortSignal(timeoutMs: number) {
+  const abortController = new AbortController();
+  setTimeout(() => {
+    abortController.abort();
+  }, timeoutMs || 0);
+
+  return abortController.signal;
+};
+
 export function ChatWindow({
   currentChat,
   closeChatWindow,
@@ -70,55 +119,6 @@ export function ChatWindow({
     setMessages(prev => [...prev, ...webMessage.messages.filter(msg => msg.key.remoteJid === currentChat.jid)])
   });
 
-  // Example usage
-  // const webpFile = await convertToWebP(file);
-  // const webpUrl = URL.createObjectURL(webpFile);
-  async function convertToWebP(file: File): Promise<File> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) return reject("Canvas context not available");
-
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const webpFile = new File([blob], file.name.replace(/\.[^.]+$/, ".webp"), {
-                type: "image/webp",
-                lastModified: Date.now(),
-              });
-              resolve(webpFile);
-            } else {
-              reject("Failed to convert to WebP");
-            }
-          },
-          "image/webp",
-          0.9 // quality
-        );
-      };
-
-      img.onerror = (err) => reject("Image load failed: " + err);
-      img.src = url;
-    });
-  };
-
-  function newAbortSignal(timeoutMs: number) {
-    const abortController = new AbortController();
-    setTimeout(() => {
-      abortController.abort();
-    }, timeoutMs || 0);
-
-    return abortController.signal;
-  };
-
   async function fetchData(newOffset = 0) {
     const m = await axios.get<proto.IWebMessageInfo[]>(
       `${API_URL}/messages/${currentChat!.jid}/50/${newOffset}`,
@@ -141,9 +141,12 @@ export function ChatWindow({
         'Content-Type': 'application/json'
       },
       signal: newAbortSignal(5000)
+    }).finally(() => {
+      setIsSending(false);
+      setMessage("");
+      setImages([]);
     });
 
-    setIsSending(false);
     return response.data;
   };
 
@@ -163,8 +166,12 @@ export function ChatWindow({
         headers: { 'Content-Type': 'multipart/form-data' },
         signal: newAbortSignal(5000)
       },
-    );
-    setIsSending(false);
+    ).finally(() => {
+      setIsSending(false);
+      setMessage("");
+      setImages([]);
+    });
+
     return response.data;
   };
 
@@ -211,11 +218,13 @@ export function ChatWindow({
             'Content-Type': 'multipart/form-data'
           }
         }
-      );
+      ).finally(() => {
+        setIsSending(false);
+        setMessage("");
+        setImages([]);
+      });
 
-      setIsSending(false);
-      setMessage("");
-      setImages([]);
+
       return;
     } else if (currentChat!.jid === "status@broadcast") {
       // TODO: remove this duplicate!
@@ -234,11 +243,11 @@ export function ChatWindow({
         {
           headers: { 'Content-Type': 'application/json' },
         }
-      );
-
-      setIsSending(false);
-      setMessage("");
-      setImages([]);
+      ).finally(() => {
+        setIsSending(false);
+        setMessage("");
+        setImages([]);
+      });
       return;
     }
 
@@ -251,10 +260,6 @@ export function ChatWindow({
         file: webpFile,
         quote: JSON.stringify(quote!)
       });
-
-      setIsSending(false);
-      setMessage("");
-      setImages([]);
       return;
     }
 
@@ -275,9 +280,6 @@ export function ChatWindow({
       });
     }
 
-    setIsSending(false);
-    setMessage("");
-    setImages([]);
   };
 
   const handleKeyDown: JSX.EventHandlerUnion<HTMLTextAreaElement, KeyboardEvent> = async (e) => {

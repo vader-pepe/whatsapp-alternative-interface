@@ -1,0 +1,23 @@
+name: whatsapp-alternative-client
+services:
+    whatsapp:
+        container_name: whatsapp
+        restart: always
+        env_file:
+            - server/.env
+        volumes:
+            - ./app-data/:/app/app-data
+        ports:
+            - "${SERVER_PORT}:8001"
+        build:
+        context: ./server
+        dockerfile: Dockerfile
+    whatsapp-client:
+        container_name: whatsapp-client
+        env_file:
+            - client/.env
+        ports:
+            - "${CLIENT_PORT}:80"
+        build:
+        context: ./client
+        dockerfile: Dockerfile
